@@ -1,12 +1,12 @@
 import json
 from typing import Any, Dict, List, Optional
-from devai.core.exceptions import AIPlanningError
-from devai.memory.history import HistoryManager
-from devai.core.config import ConfigManager
-from devai.ai.providers.openai_provider import OpenAIProvider
-from devai.ai.providers.anthropic_provider import AnthropicProvider
-from devai.ai.providers.mock_provider import MockProvider
-from devai.ai.providers.llama_provider import LlamaProvider
+from devai.utils.core.exceptions import AIPlanningError
+from devai.knowledge.history import HistoryManager
+from devai.config.config_loader import ConfigManager
+from devai.ai_providers.openai_provider import OpenAIProvider
+from devai.ai_providers.anthropic_provider import AnthropicProvider
+from devai.ai_providers.mock_provider import MockProvider
+from devai.ai_providers.llama_provider import LlamaProvider
 
 
 class AIPlanner:

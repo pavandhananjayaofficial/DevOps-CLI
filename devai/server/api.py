@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from devai.agent.intent.parser import IntentParser
-from devai.planner.deployment_planner import AIPlanner
-from devai.planner.validation import SchemaValidator
+from devai.intent.parser import IntentParser
+from devai.ai.planner import AIPlanner
+from devai.validation.validator import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.plugins.registry import PluginRegistry
-from devai.utils.core.exceptions import DevAIException
-from devai.security.policy.policy_engine import PolicyEngine
+from devai.core.exceptions import DevAIException
+from devai.policy.policy_engine import PolicyEngine
 from fastapi.responses import FileResponse
 import os
 
@@ -82,6 +82,8 @@ async def execute_endpoint(request: ExecuteRequest):
             message="Infrastructure deployed successfully!",
             plan=report.model_dump(),
         )
+    except HTTPException:
+        raise
     except DevAIException as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
