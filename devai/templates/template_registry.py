@@ -7,7 +7,7 @@ class TemplateRegistry:
     """
 
     def __init__(self):
-        self.templates = {
+        self.templates: Dict[str, Dict[str, Any]] = {
             "fastapi-basic": {
                 "description": "FastAPI application with basic Docker configuration",
                 "services": ["api"],
@@ -21,7 +21,8 @@ class TemplateRegistry:
         }
 
     def list_templates(self) -> List[Dict[str, str]]:
-        return [{"id": k, "description": v["description"]} for k, v in self.templates.items()]
+        # Ensure we return List[Dict[str, str]] by casting description to str explicitly
+        return [{"id": k, "description": str(v["description"])} for k, v in self.templates.items()]
 
     def get_template(self, template_id: str) -> Optional[Dict[str, Any]]:
         return self.templates.get(template_id)

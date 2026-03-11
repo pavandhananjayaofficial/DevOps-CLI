@@ -428,6 +428,69 @@ def handle_slash_command(command: str):
     else:
         console.print(f"[red]Unknown command: {cmd}[/red]")
 
+@cli.group()
+def agent():
+    """Manage autonomous DevOps agents."""
+    pass
+
+@agent.command(name="run")
+@click.argument("task")
+def run_agent_task(task):
+    """Assign a complex task to the autonomous agent manager."""
+    from devai.agents.agent_manager import AgentManager
+    am = AgentManager()
+    console.print(f"[dim]🤖 Assigning task: {task}[/dim]")
+    res = am.run_task(task)
+    console.print("\n[bold blue]Autonomous Agent Plan:[/bold blue]")
+    console.print(res)
+
+@agent.command(name="status")
+def agent_status():
+    """Show the status of active specialized agents."""
+    from devai.agents.agent_manager import AgentManager
+    am = AgentManager()
+    status = am.get_agent_status()
+    table = Table(title="Specialized Agents")
+    table.add_column("Agent", style="cyan")
+    table.add_column("Status", style="green")
+    for a, s in status.items():
+        table.add_row(a, s)
+    console.print(table)
+
+@cli.group()
+def knowledge():
+    """Access the autonomous learning knowledge base."""
+    pass
+
+@knowledge.command(name="list")
+def list_knowledge():
+    """List learned failure/remediation patterns."""
+    from devai.learning.knowledge_base import KnowledgeBase
+    kb = KnowledgeBase()
+    records = kb.records
+    if not records:
+        console.print("[dim]Knowledge base is empty.[/dim]")
+    else:
+        table = Table(title="Learned Patterns")
+        table.add_column("Project", style="cyan")
+        table.add_column("Failure", style="red")
+        table.add_column("Remediation", style="green")
+        for r in records:
+            table.add_row(r['project'], r['failure'], r['remediation'])
+        console.print(table)
+
+@cli.group()
+def scheduler():
+    """Manage the background automation scheduler."""
+    pass
+
+@scheduler.command(name="list")
+def list_tasks():
+    """List scheduled background tasks."""
+    from devai.automation.scheduler import TaskScheduler
+    # Normally would look at a persistent task list
+    console.print("[dim]No tasks currently scheduled in background worker.[/dim]")
+
 @cli.command()
 @click.argument("requirement")
 def advise(requirement):

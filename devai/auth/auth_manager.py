@@ -30,7 +30,8 @@ class AuthManager:
         if user and user["password_hash"] == self._hash(password):
             self.current_user = username
             self.current_role = user["role"]
-            print(f"[Auth] 🔓 Logged in as {username} ({self.current_role.value})")
+            role_val = self.current_role.value if self.current_role else "N/A"
+            print(f"[Auth] 🔓 Logged in as {username} ({role_val})")
             return True
         return False
 

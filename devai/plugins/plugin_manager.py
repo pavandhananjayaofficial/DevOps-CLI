@@ -19,7 +19,8 @@ class PluginManager:
             if hasattr(eps, 'select'):
                 plugins = eps.select(group=self.group_name)
             else:
-                plugins = eps.get(self.group_name, [])
+                # Fallback for older python versions
+                plugins = getattr(eps, self.group_name, [])
             return [p.name for p in plugins]
         except Exception:
             return []
@@ -32,7 +33,8 @@ class PluginManager:
                 p = eps.select(group=self.group_name, name=name)
                 plugin_entry = next(iter(p), None)
             else:
-                plugin_entry = next((p for p in eps.get(self.group_name, []) if p.name == name), None)
+                # Fallback
+                plugin_entry = next((p for p in getattr(eps, self.group_name, []) if p.name == name), None)
             
             if plugin_entry:
                 loaded = plugin_entry.load()
