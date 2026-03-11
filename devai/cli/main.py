@@ -1,15 +1,15 @@
 import click
 from rich.console import Console
 from rich.table import Table
-from devai.intent.parser import IntentParser
-from devai.ai.planner import AIPlanner
-from devai.validation.validator import SchemaValidator
+from devai.agent.intent.parser import IntentParser
+from devai.planner.deployment_planner import AIPlanner
+from devai.planner.validation import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.connectors.docker import DockerConnector
 from devai.plugins.registry import PluginRegistry
-from devai.core.exceptions import DevAIException
-from devai.memory.database import init_db
-from devai.core.config import ConfigManager
+from devai.utils.core.exceptions import DevAIException
+from devai.database.db_manager import init_db
+from devai.config.config_loader import ConfigManager
 import os
 import sys
 import subprocess
@@ -48,8 +48,8 @@ def start():
 @click.argument("name", required=False)
 def status(name):
     """Check the status of projects and resources."""
-    from devai.memory.state_manager import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.database.models import StateManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     # 1. Local/Logical Status
@@ -88,8 +88,8 @@ def status(name):
 @click.option("--tail", "-t", default=50, help="Number of lines")
 def logs(project, service, tail):
     """View logs from a remote project."""
-    from devai.memory.state_manager import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.database.models import StateManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -114,8 +114,8 @@ def logs(project, service, tail):
 @click.option("--service", "-s", help="Specific service name")
 def restart(project, service):
     """Restart a remote project or service."""
-    from devai.memory.state_manager import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.database.models import StateManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -139,8 +139,8 @@ def restart(project, service):
 @click.argument("project")
 def stop(project):
     """Stop a remote project."""
-    from devai.memory.state_manager import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.database.models import StateManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -181,9 +181,9 @@ def doctor():
 @click.option("--server", "-s", default=None, help="Target server name from registry")
 def deploy_repo(repo_url, server):
     """Clone a Git repo and deploy it automatically."""
-    from devai.git.git_manager import GitManager
-    from devai.core.detector import ProjectDetector
-    from devai.core.server_manager import ServerManager
+    from devai.connectors.git.git_manager import GitManager
+    from devai.utils.detector import ProjectDetector
+    from devai.utils.core.server_manager import ServerManager
 
     git = GitManager()
     local_path = git.clone_or_pull(repo_url)
@@ -204,8 +204,8 @@ def deploy_repo(repo_url, server):
 @click.argument("project")
 def monitor(project):
     """Show live health metrics for a deployed project."""
-    from devai.memory.state_manager import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.database.models import StateManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.monitoring.system_monitor import SystemMonitor
 
     resources = StateManager.get_all_resources()
@@ -243,7 +243,7 @@ def monitor(project):
 @click.option("--output", "-o", default=".", help="Output directory for pipeline file")
 def pipeline(project, server, user, output):
     """Generate a GitHub Actions CI/CD pipeline."""
-    from devai.cicd.pipeline_generator import PipelineGenerator
+    from devai.deployment.cicd.pipeline_generator import PipelineGenerator
 
     gen = PipelineGenerator()
     path = gen.save_pipeline(output, project, server, user)
@@ -255,10 +255,10 @@ def pipeline(project, server, user, output):
 @click.option("--service", "-s", default=None, help="Specific service name")
 def analyze(project, service):
     """Collect logs and run AI error analysis."""
-    from devai.memory.state_manager import StateManager
-    from devai.core.server_manager import ServerManager
-    from devai.logs.log_collector import LogCollector
-    from devai.ai.error_analyzer import AIErrorAnalyzer
+    from devai.database.models import StateManager
+    from devai.utils.core.server_manager import ServerManager
+    from devai.monitoring.logs.log_collector import LogCollector
+    from devai.planner.error_analyzer import AIErrorAnalyzer
 
     resources = StateManager.get_all_resources()
     p_meta = next((r for r in resources if r['name'] == project), None)
@@ -303,7 +303,7 @@ def cluster():
 @click.option("--nodes", "-n", default=3, help="Number of worker nodes")
 def create_cluster(name, provider, nodes):
     """Provision a new K8s cluster."""
-    from devai.cluster.cluster_manager import ClusterManager
+    from devai.connectors.cluster.cluster_manager import ClusterManager
     cm = ClusterManager(provider)
     res = cm.create_cluster(name, node_count=nodes)
     console.print(f"[green]Cluster '{name}' provisioning started.[/green]")
@@ -314,7 +314,7 @@ def create_cluster(name, provider, nodes):
 @click.argument("replicas", type=int)
 def scale(project, replicas):
     """Manually scale a project's replicas."""
-    from devai.orchestration.kubernetes_manager import KubernetesManager
+    from devai.deployment.kubernetes_manager import KubernetesManager
     # In a real app, this would update the state and apply the new manifest
     console.print(f"[green]Scaling project '{project}' to {replicas} replicas...[/green]")
     km = KubernetesManager()
@@ -324,11 +324,11 @@ def scale(project, replicas):
 @click.argument("project")
 def heal(project):
     """Trigger an autonomous self-healing probe for a project."""
-    from devai.incident.incident_manager import IncidentManager
+    from devai.monitoring.incident.incident_manager import IncidentManager
     from devai.monitoring.system_monitor import SystemMonitor
-    from devai.logs.log_collector import LogCollector
-    from devai.core.server_manager import ServerManager
-    from devai.memory.state_manager import StateManager
+    from devai.monitoring.logs.log_collector import LogCollector
+    from devai.utils.core.server_manager import ServerManager
+    from devai.database.models import StateManager
 
     resources = StateManager.get_all_resources()
     p_meta = next((r for r in resources if r['name'] == project), None)
@@ -361,10 +361,10 @@ def heal(project):
 @click.argument("project")
 def analyze_infra(project):
     """Run AI-driven infrastructure optimization analysis."""
-    from devai.ai.infra_analyzer import InfraAnalyzer
+    from devai.planner.infra_planner import InfraAnalyzer
     from devai.monitoring.system_monitor import SystemMonitor
-    from devai.core.server_manager import ServerManager
-    from devai.memory.state_manager import StateManager
+    from devai.utils.core.server_manager import ServerManager
+    from devai.database.models import StateManager
 
     resources = StateManager.get_all_resources()
     p_meta = next((r for r in resources if r['name'] == project), None)
@@ -440,7 +440,7 @@ def agent():
 @click.argument("task")
 def run_agent_task(task):
     """Assign a complex task to the autonomous agent manager."""
-    from devai.agents.agent_manager import AgentManager
+    from devai.agent.agent_manager import AgentManager
     am = AgentManager()
     console.print(f"[dim]🤖 Assigning task: {task}[/dim]")
     res = am.run_task(task)
@@ -468,7 +468,7 @@ def knowledge():
 @knowledge.command(name="list")
 def list_knowledge():
     """List learned failure/remediation patterns."""
-    from devai.learning.knowledge_base import KnowledgeBase
+    from devai.knowledge.learning.knowledge_base import KnowledgeBase
     kb = KnowledgeBase()
     records = kb.records
     if not records:
@@ -498,7 +498,7 @@ def list_tasks():
 @click.argument("requirement")
 def advise(requirement):
     """Ask the AI Infrastructure Assistant for architecture advice."""
-    from devai.ai.infra_assistant import AIInfraAssistant
+    from devai.planner.infra_assistant import AIInfraAssistant
     assistant = AIInfraAssistant()
     console.print(f"[dim]Consulting AI Architect on '{requirement}'...[/dim]")
     suggestion = assistant.suggest_architecture(requirement)
@@ -514,7 +514,7 @@ def project():
 @click.argument("name")
 def create_project(name):
     """Create a new project group."""
-    from devai.projects.project_manager import ProjectManager
+    from devai.environments.project_manager import ProjectManager
     pm = ProjectManager()
     pm.create_project(name)
     console.print(f"[green]Project '{name}' created.[/green]")
@@ -553,7 +553,7 @@ def list_templates():
 @cli.command()
 def login():
     """Login to the DevAI platform."""
-    from devai.auth.auth_manager import AuthManager
+    from devai.security.auth.auth_manager import AuthManager
     am = AuthManager()
     username = click.prompt("Username")
     password = click.prompt("Password", hide_input=True)
@@ -572,7 +572,7 @@ def secrets():
 @click.argument("value")
 def set_secret(key, value):
     """Store a secret in the encrypted vault."""
-    from devai.memory.vault import VaultManager
+    from devai.knowledge.memory.vault import VaultManager
     vault = VaultManager()
     vault.store_secret(key, value)
     console.print(f"[green]Secret '{key}' stored successfully.[/green]")
@@ -600,13 +600,13 @@ def server():
 @click.argument("username")
 def add_server(name, ip, username):
     """Register a new VPS server."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     ServerManager.add_server(name, ip, username)
 
 @server.command(name="list")
 def list_servers():
     """List all managed servers."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     servers = ServerManager.list_servers()
     if not servers:
         console.print("[dim]No servers registered.[/dim]")
@@ -624,7 +624,7 @@ def list_servers():
 @click.argument("name")
 def remove_server(name):
     """Remove a server from the registry."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     ServerManager.remove_server(name)
 
 @server.command(name="setup")
@@ -637,7 +637,7 @@ def setup_server(name):
 def run_devai_loop(user_input: str):
     try:
         # 0. Context Gathering
-        from devai.core.detector import ProjectDetector
+        from devai.utils.detector import ProjectDetector
         project_context = ProjectDetector.get_project_summary()
         console.print(f"[dim]{project_context.strip()}[/dim]")
 
@@ -656,8 +656,8 @@ def run_devai_loop(user_input: str):
         validator.enforce_security_policies(plan)
 
         # 3.1 Policy Engine check (Phase 5)
-        from devai.policy.policy_engine import PolicyEngine
-        from devai.projects.project_manager import EnvManager
+        from devai.security.policy.policy_engine import PolicyEngine
+        from devai.environments.project_manager import EnvManager
         em = EnvManager()
         pe = PolicyEngine()
         decision = pe.evaluate(plan, em.active_env)

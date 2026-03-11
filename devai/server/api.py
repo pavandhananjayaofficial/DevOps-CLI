@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from devai.intent.parser import IntentParser
-from devai.ai.planner import AIPlanner
-from devai.validation.validator import SchemaValidator
+from devai.agent.intent.parser import IntentParser
+from devai.planner.deployment_planner import AIPlanner
+from devai.planner.validation import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.plugins.registry import PluginRegistry
-from devai.core.exceptions import DevAIException
-from devai.policy.policy_engine import PolicyEngine
+from devai.utils.core.exceptions import DevAIException
+from devai.security.policy.policy_engine import PolicyEngine
 from fastapi.responses import FileResponse
 import os
 
