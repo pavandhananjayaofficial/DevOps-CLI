@@ -3,7 +3,7 @@ import shutil
 import subprocess
 from typing import Optional, Dict, Any
 
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 class GitManager:
     """

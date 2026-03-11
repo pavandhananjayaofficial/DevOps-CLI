@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from devai.ai.providers.base import BaseAIProvider
+from devai.ai_providers.base import BaseAIProvider
 
 class LlamaProvider(BaseAIProvider):
     """

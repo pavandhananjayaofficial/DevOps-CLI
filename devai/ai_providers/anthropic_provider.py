@@ -3,8 +3,8 @@ import json
 from typing import List, Dict, Any
 from anthropic import Anthropic
 from anthropic.types import TextBlock
-from devai.ai.providers.base import BaseAIProvider
-from devai.core.exceptions import AIPlanningError
+from devai.ai_providers.base import BaseAIProvider
+from devai.utils.core.exceptions import AIPlanningError
 
 class AnthropicProvider(BaseAIProvider):
     def __init__(self, config: Dict[str, Any]):

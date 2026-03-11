@@ -1,7 +1,7 @@
 import yaml
 from typing import Dict, Any, List
 from devai.connectors.vps_connector import VPSConnector
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 class DeploymentManager:
     """

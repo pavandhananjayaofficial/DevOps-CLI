@@ -1,13 +1,13 @@
 import click
 from rich.console import Console
 from rich.table import Table
-from devai.intent.parser import IntentParser
+from devai.agent.intent.parser import IntentParser
 from devai.planner.deployment_planner import AIPlanner
 from devai.planner.validation import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.connectors.docker import DockerConnector
 from devai.plugins.registry import PluginRegistry
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 from devai.database.db_manager import init_db
 from devai.config.config_loader import ConfigManager
 import os
@@ -50,7 +50,7 @@ def start():
 def status(name):
     """Check the status of projects and resources."""
     from devai.database.models import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     # 1. Local/Logical Status
@@ -90,7 +90,7 @@ def status(name):
 def logs(project, service, tail):
     """View logs from a remote project."""
     from devai.database.models import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -116,7 +116,7 @@ def logs(project, service, tail):
 def restart(project, service):
     """Restart a remote project or service."""
     from devai.database.models import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -141,7 +141,7 @@ def restart(project, service):
 def stop(project):
     """Stop a remote project."""
     from devai.database.models import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -184,7 +184,7 @@ def deploy_repo(repo_url, server):
     """Clone a Git repo and deploy it automatically."""
     from devai.connectors.git.git_manager import GitManager
     from devai.utils.detector import ProjectDetector
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
 
     git = GitManager()
     local_path = git.clone_or_pull(repo_url)
@@ -206,7 +206,7 @@ def deploy_repo(repo_url, server):
 def monitor(project):
     """Show live health metrics for a deployed project."""
     from devai.database.models import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.monitoring.system_monitor import SystemMonitor
 
     resources = StateManager.get_all_resources()
@@ -257,7 +257,7 @@ def pipeline(project, server, user, output):
 def analyze(project, service):
     """Collect logs and run AI error analysis."""
     from devai.database.models import StateManager
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.monitoring.logs.log_collector import LogCollector
     from devai.planner.error_analyzer import AIErrorAnalyzer
 
@@ -328,7 +328,7 @@ def heal(project):
     from devai.monitoring.incident.incident_manager import IncidentManager
     from devai.monitoring.system_monitor import SystemMonitor
     from devai.monitoring.logs.log_collector import LogCollector
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.database.models import StateManager
 
     resources = StateManager.get_all_resources()
@@ -364,7 +364,7 @@ def analyze_infra(project):
     """Run AI-driven infrastructure optimization analysis."""
     from devai.planner.infra_planner import InfraAnalyzer
     from devai.monitoring.system_monitor import SystemMonitor
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     from devai.database.models import StateManager
 
     resources = StateManager.get_all_resources()
@@ -581,7 +581,7 @@ def set_secret(key, value):
 @secrets.command(name="list")
 def list_secrets():
     """List all stored secret keys."""
-    from devai.memory.vault import VaultManager
+    from devai.knowledge.vault import VaultManager
     vault = VaultManager()
     keys = vault.list_secrets()
     if not keys:
@@ -601,13 +601,13 @@ def server():
 @click.argument("username")
 def add_server(name, ip, username):
     """Register a new VPS server."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     ServerManager.add_server(name, ip, username)
 
 @server.command(name="list")
 def list_servers():
     """List all managed servers."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     servers = ServerManager.list_servers()
     if not servers:
         console.print("[dim]No servers registered.[/dim]")
@@ -625,14 +625,14 @@ def list_servers():
 @click.argument("name")
 def remove_server(name):
     """Remove a server from the registry."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     ServerManager.remove_server(name)
 
 @server.command(name="setup")
 @click.argument("name")
 def setup_server(name):
     """Initialize a server with Docker and basic security."""
-    from devai.core.server_manager import ServerManager
+    from devai.utils.core.server_manager import ServerManager
     ServerManager.setup_server(name)
 
 def _render_dry_run_preview(preview):

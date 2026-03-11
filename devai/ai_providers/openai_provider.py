@@ -2,8 +2,8 @@ import os
 import json
 from typing import List, Dict, Any
 from openai import OpenAI
-from devai.ai.providers.base import BaseAIProvider
-from devai.core.exceptions import AIPlanningError
+from devai.ai_providers.base import BaseAIProvider
+from devai.utils.core.exceptions import AIPlanningError
 
 class OpenAIProvider(BaseAIProvider):
     def __init__(self, config: Dict[str, Any]):
