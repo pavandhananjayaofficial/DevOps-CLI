@@ -1,0 +1,16 @@
+{
+    "include": [
+        "devai"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        "venv"
+    ],
+    "venv": "venv",
+    "venvPath": ".",
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "pythonVersion": "3.10",
+    "analysisMode": "basic",
+    "typeCheckingMode": "basic"
+}
