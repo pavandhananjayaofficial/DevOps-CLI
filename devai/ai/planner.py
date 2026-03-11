@@ -7,6 +7,7 @@ from devai.core.config import ConfigManager
 from devai.ai.providers.openai_provider import OpenAIProvider
 from devai.ai.providers.anthropic_provider import AnthropicProvider
 from devai.ai.providers.mock_provider import MockProvider
+from devai.ai.providers.llama_provider import LlamaProvider
 
 class AIPlanner:
     """
@@ -15,23 +16,62 @@ class AIPlanner:
     
     SYSTEM_PROMPT = """
     You are an AI DevOps Architect. 
-    Your job is to generate a valid infrastructure deployment plan in JSON format.
-    Rules:
+    Your job is to generate a valid multi-service deployment plan in JSON format.
+    
+    ### Guidelines:
     - ONLY output valid JSON.
     - Resources must be deterministic.
-    - Valid types: docker_container, s3_bucket, ec2_instance, kubernetes_deployment.
-    - Valid actions: create, update, delete.
-    Example output format:
+    - Valid types: multi_service_deployment, vps_server.
+    
+    ### Multi-Service Schema Example:
     {
-      "name": "Project Name",
+      "resources": [
+        {
+          "name": "project_name",
+          "type": "multi_service_deployment",
+          "action": "CREATE",
+          "properties": {
+            "server": "server_alias_or_default",
+            "services": [
+              {
+                "name": "api",
+                "image": "my-api:latest",
+                "ports": ["8000:8000"],
+                "env": ["DB_HOST=postgres"]
+              },
+              {
+                "name": "postgres",
+                "image": "postgres:latest",
+                "env": ["POSTGRES_PASSWORD=secret"]
+              }
+            ],
+            "env": {
+               "GLOBAL_KEY": "val"
+            }
+          }
+        }
+      ]
+    }
+    """
+    Orchestration Rules:
+    - For `vps_server`, include a `commands` list for bootstrap (apt install docker, ufw allow 80).
+    - For `multi_service_deployment`, define each service and their dependencies.
+    - Always prefer Docker-based deployments on VPS.
+
+    Example VPS Output:
+    {
+      "name": "VPS Setup",
       "version": "1.0",
       "resources": [
         {
-          "name": "srv",
-          "type": "docker_container",
-          "action": "create",
-          "properties": {"image": "nginx"},
-          "depends_on": []
+          "name": "web-host",
+          "type": "vps_server",
+          "action": "setup",
+          "properties": {
+            "host": "1.2.3.4",
+            "username": "root",
+            "commands": ["apt update", "apt install -y docker.io"]
+          }
         }
       ]
     }
@@ -39,6 +79,7 @@ class AIPlanner:
 
     def __init__(self, provider_name: Optional[str] = None):
         self.config_manager = ConfigManager()
+        self.context = ""
         if not provider_name:
             provider_name = self.config_manager.config.get("active_model", "openai")
         
@@ -51,10 +92,12 @@ class AIPlanner:
             return OpenAIProvider(config)
         elif provider_type == "anthropic":
             return AnthropicProvider(config)
+        elif provider_type == "llama":
+            return LlamaProvider(config)
         else:
             return MockProvider(config)
 
-    def generate_plan(self, prompt: str) -> str:
+    def generate_plan(self, prompt: str, context: str = "") -> str:
         """
         Takes the user intent and asks the AI to generate a JSON plan.
         """
@@ -64,8 +107,10 @@ class AIPlanner:
         # Get context
         history = HistoryManager.get_recent_history(limit=5)
         
+        full_prompt = f"PROJECT CONTEXT:\n{context}\n\nUSER REQUEST: {prompt}" if context else prompt
+        
         raw_output = self.provider.generate_response(
-            prompt=prompt,
+            prompt=full_prompt,
             system_prompt=self.SYSTEM_PROMPT,
             history=history
         )

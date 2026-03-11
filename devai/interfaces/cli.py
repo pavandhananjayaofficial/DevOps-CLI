@@ -42,21 +42,120 @@ def start():
     interactive_chat()
 
 @cli.command()
-def status():
-    """Check the status of managed infrastructure."""
+@click.argument("name", required=False)
+def status(name):
+    """Check the status of projects and resources."""
     from devai.memory.state_manager import StateManager
+    from devai.core.server_manager import ServerManager
+    from devai.execution.docker_manager import DockerManager
+    
+    # 1. Local/Logical Status
     resources = StateManager.get_all_resources()
-    
-    table = Table(title="DevAI Managed Infrastructure")
-    table.add_column("Name", style="cyan")
-    table.add_column("Type", style="magenta")
-    table.add_column("Status", style="green")
-    table.add_column("Last Updated", style="dim")
+    if not resources:
+        console.print("[dim]No local resources found.[/dim]")
+    else:
+        table = Table(title="Resource Status")
+        table.add_column("Resource", style="cyan")
+        table.add_column("Type", style="green")
+        table.add_column("Status", style="magenta")
+        for r in resources:
+            table.add_row(r['name'], r['type'], r['status'])
+        console.print(table)
 
-    for r in resources:
-        table.add_row(r["name"], r["type"], r["status"], r.get("last_updated", "N/A"))
+    # 2. Remote VPS status (if name provided)
+    if name:
+        # Check if it's a multi-service project in state
+        project = next((r for r in resources if r['name'] == name), None)
+        if project and project['type'] == "multi_service":
+            server_name = project['properties'].get("server", "default")
+            servers = ServerManager.list_servers()
+            server = next((s for s in servers if s['name'] == server_name), None)
+            if server:
+                console.print(f"\n[bold]Remote Status for {name}:[/bold]")
+                dm = DockerManager(server['ip'], server['username'])
+                try:
+                    res = dm.get_status(name)
+                    console.print(res)
+                finally:
+                    dm.close()
+
+@cli.command()
+@click.argument("project")
+@click.option("--service", "-s", help="Specific service name")
+@click.option("--tail", "-t", default=50, help="Number of lines")
+def logs(project, service, tail):
+    """View logs from a remote project."""
+    from devai.memory.state_manager import StateManager
+    from devai.core.server_manager import ServerManager
+    from devai.execution.docker_manager import DockerManager
     
-    console.print(table)
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found in registry.[/red]")
+        return
+        
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if server:
+        dm = DockerManager(server['ip'], server['username'])
+        try:
+            res = dm.get_logs(project, service, tail)
+            console.print(res)
+        finally:
+            dm.close()
+
+@cli.command()
+@click.argument("project")
+@click.option("--service", "-s", help="Specific service name")
+def restart(project, service):
+    """Restart a remote project or service."""
+    from devai.memory.state_manager import StateManager
+    from devai.core.server_manager import ServerManager
+    from devai.execution.docker_manager import DockerManager
+    
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found.[/red]")
+        return
+        
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if server:
+        dm = DockerManager(server['ip'], server['username'])
+        try:
+            dm.restart_project(project, service)
+            console.print(f"[green]Project '{project}' restart command sent.[/green]")
+        finally:
+            dm.close()
+
+@cli.command()
+@click.argument("project")
+def stop(project):
+    """Stop a remote project."""
+    from devai.memory.state_manager import StateManager
+    from devai.core.server_manager import ServerManager
+    from devai.execution.docker_manager import DockerManager
+    
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found.[/red]")
+        return
+        
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if server:
+        dm = DockerManager(server['ip'], server['username'])
+        try:
+            dm.stop_project(project)
+            console.print(f"[yellow]Project '{project}' stopped.[/yellow]")
+        finally:
+            dm.close()
 
 @cli.command()
 def doctor():
@@ -125,8 +224,85 @@ def handle_slash_command(command: str):
     else:
         console.print(f"[red]Unknown command: {cmd}[/red]")
 
+@cli.group()
+def secrets():
+    """Manage encrypted secrets and environment variables."""
+    pass
+
+@secrets.command(name="set")
+@click.argument("key")
+@click.argument("value")
+def set_secret(key, value):
+    """Store a secret in the encrypted vault."""
+    from devai.memory.vault import VaultManager
+    vault = VaultManager()
+    vault.store_secret(key, value)
+    console.print(f"[green]Secret '{key}' stored successfully.[/green]")
+
+@secrets.command(name="list")
+def list_secrets():
+    """List all stored secret keys."""
+    from devai.memory.vault import VaultManager
+    vault = VaultManager()
+    keys = vault.list_secrets()
+    if not keys:
+        console.print("[dim]No secrets found in vault.[/dim]")
+    else:
+        for k in keys:
+            console.print(f" - {k}")
+
+@cli.group()
+def server():
+    """Manage remote VPS servers."""
+    pass
+
+@server.command(name="add")
+@click.argument("name")
+@click.argument("ip")
+@click.argument("username")
+def add_server(name, ip, username):
+    """Register a new VPS server."""
+    from devai.core.server_manager import ServerManager
+    ServerManager.add_server(name, ip, username)
+
+@server.command(name="list")
+def list_servers():
+    """List all managed servers."""
+    from devai.core.server_manager import ServerManager
+    servers = ServerManager.list_servers()
+    if not servers:
+        console.print("[dim]No servers registered.[/dim]")
+    else:
+        table = Table(title="Managed Servers")
+        table.add_column("Name", style="cyan")
+        table.add_column("IP", style="green")
+        table.add_column("Username", style="yellow")
+        table.add_column("Status", style="magenta")
+        for s in servers:
+            table.add_row(s['name'], s['ip'], s['username'], s['status'])
+        console.print(table)
+
+@server.command(name="remove")
+@click.argument("name")
+def remove_server(name):
+    """Remove a server from the registry."""
+    from devai.core.server_manager import ServerManager
+    ServerManager.remove_server(name)
+
+@server.command(name="setup")
+@click.argument("name")
+def setup_server(name):
+    """Initialize a server with Docker and basic security."""
+    from devai.core.server_manager import ServerManager
+    ServerManager.setup_server(name)
+
 def run_devai_loop(user_input: str):
     try:
+        # 0. Context Gathering
+        from devai.core.detector import ProjectDetector
+        project_context = ProjectDetector.get_project_summary()
+        console.print(f"[dim]{project_context.strip()}[/dim]")
+
         # 1. Intent Parsing
         parser = IntentParser()
         intent = parser.parse(user_input)
@@ -134,7 +310,7 @@ def run_devai_loop(user_input: str):
         # 2. AI Planning
         planner = AIPlanner()
         console.print(f"[dim]Planning with AI ([bold]{planner.get_active_model_info()['model']}[/bold])...[/dim]")
-        raw_plan = planner.generate_plan(user_input)
+        raw_plan = planner.generate_plan(user_input, context=project_context)
 
         # 3. Validation
         validator = SchemaValidator()

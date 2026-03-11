@@ -13,22 +13,33 @@
 ## Phase 3: Orchestration [DONE]
 - [x] DAG-based resolution
 - [x] Dependency tracking between resources
-
 ## Phase 4: Interface & Plugins [DONE]
 - [x] CLI Implementation
 - [x] Dynamic Plugin Registry
 - [x] Web UI Chat Interface
 
-## Phase 5: Persistence [DONE]
-- [x] SQLite state tracking
-- [x] Conversation history injection
+## Phase 1: MVP (Completed/Stabilizing)
+- [x] Layered Architecture (8-Layer Design)
+- [x] AI Planner (Prompting + JSON generation)
+- [x] Docker Deployment (Local & SSH)
+- [x] Model Management Layer (Multi-provider support)
+- [x] Memory System (SQLite persistence)
 
-## Phase 6: Cloud Expansion [NEXT]
-- [ ] AWS S3 & EC2 Connectors
-- [ ] Kubernetes Deployment Connector
-- [ ] Pulumi/Terraform wrapper plugins
+## Phase 2: Enhanced Orchestration & VPS (Current)
+- [ ] **VPS Provisioning**: Automate server creation (AWS/DigitalOcean).
+- [ ] **Automatic Server Setup**: Remote installation of Docker, Firewall (UFW) config.
+- [ ] **Multi-Service Support**: Orchestrating API + Database + Cache.
+- [ ] **Deployment Management**: Advanced `status`, `restart`, and `logs` monitoring.
+- [ ] **Secret Management**: Secure environment variable and API key storage.
 
-## Phase 7: Enterprise Features [FUTURE]
-- [ ] Multi-user support with Auth
-- [ ] Real-time infrasructure monitoring
+## Phase 3: Cloud Automation & DevOps
+- [ ] Cloud-native service automation (S3, RDS, IAM).
+- [ ] CI/CD pipeline generation.
+- [ ] Infrastructure monitoring & alerting.
+
+## Phase 4: Kubernetes & Self-Healing
+- [ ] Kubernetes orchestration.
+- [ ] Self-healing infrastructure (auto-restarts, scaling).
+- [ ] Advanced security auditing.
+itoring
 - [ ] Multi-cloud cost estimation

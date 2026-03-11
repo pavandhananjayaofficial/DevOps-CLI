@@ -27,10 +27,17 @@ class SchemaValidator:
         if not plan.resources:
             raise ValidationError("Plan contains no resources to deploy.")
             
-        known_types = {"docker_container", "s3_bucket", "ec2_instance", "kubernetes_deployment"}
+        VALID_TYPES = [
+        "docker_container", 
+        "vps_server", 
+        "multi_service_deployment",
+        "s3_bucket", 
+        "ec2_instance", 
+        "kubernetes_deployment"
+    ]
             
         for resource in plan.resources:
-            if resource.type not in known_types:
+            if resource.type not in VALID_TYPES:
                 raise ValidationError(f"Security Policy Violation: Resource type '{resource.type}' is not supported or allowed.")
                 
             if resource.type == "s3_bucket":

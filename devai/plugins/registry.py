@@ -19,7 +19,9 @@ class PluginRegistry:
         """
         # Load built-in connectors first
         from devai.connectors.docker import DockerConnector
+        from devai.connectors.ssh import SSHConnector
         self.connectors["docker_container"] = DockerConnector()
+        self.connectors["ssh_server"] = SSHConnector()
         
         # Load external plugins
         eps = importlib.metadata.entry_points()

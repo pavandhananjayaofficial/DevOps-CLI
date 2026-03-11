@@ -2,7 +2,8 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from sqlmodel import select
-from devai.memory.database import get_session, ResourceState
+from sqlmodel import select, delete
+from devai.memory.database import get_session, ResourceState, ServerState
 
 class StateManager:
     """
@@ -56,3 +57,42 @@ class StateManager:
                     "status": r.status
                 } for r in results
             ]
+
+    @staticmethod
+    def add_server(name: str, ip: str, username: str, status: str = "pending"):
+        with get_session() as session:
+            new_server = ServerState(name=name, ip=ip, username=username, status=status)
+            session.add(new_server)
+            session.commit()
+
+    @staticmethod
+    def get_servers() -> List[Dict[str, Any]]:
+        with get_session() as session:
+            statement = select(ServerState)
+            results = session.exec(statement).all()
+            return [
+                {
+                    "name": s.name,
+                    "ip": s.ip,
+                    "username": s.username,
+                    "status": s.status
+                } for s in results
+            ]
+
+    @staticmethod
+    def remove_server(name: str):
+        with get_session() as session:
+            statement = delete(ServerState).where(ServerState.name == name)
+            session.exec(statement)
+            session.commit()
+
+    @staticmethod
+    def update_server_status(name: str, status: str):
+        with get_session() as session:
+            statement = select(ServerState).where(ServerState.name == name)
+            server = session.exec(statement).first()
+            if server:
+                server.status = status
+                server.last_seen = datetime.utcnow()
+                session.add(server)
+                session.commit()

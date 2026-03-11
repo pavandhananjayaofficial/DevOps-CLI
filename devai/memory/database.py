@@ -23,6 +23,15 @@ class ResourceState(SQLModel, table=True):
     status: str # 'deployed', 'deleted', 'failed'
     last_updated: datetime = Field(default_factory=datetime.utcnow)
 
+class ServerState(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    ip: str
+    username: str
+    status: str = Field(default="pending") # pending, ready, unreachable
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_seen: Optional[datetime] = Field(default=None)
+
 def init_db():
     SQLModel.metadata.create_all(engine)
 
