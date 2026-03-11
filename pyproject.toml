@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-devai = "devai.interfaces.cli:cli"
+devai = "devai.cli.main:cli"
 
 [build-system]
 requires = ["hatchling"]

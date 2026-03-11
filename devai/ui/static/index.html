@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevAI | Premium DevOps Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --container-bg: #1e293b;
+            --accent-color: #38bdf8;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --message-user: #0369a1;
+            --message-ai: #334155;
+            --glass: rgba(30, 41, 59, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 1rem 1.5rem;
+            border-radius: 1.5rem;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background: var(--message-user);
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .ai-message {
+            align-self: flex-start;
+            background: var(--message-ai);
+            border-bottom-left-radius: 0.25rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .plan-card {
+            background: rgba(0,0,0,0.2);
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .approve-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 1rem;
+            transition: all 0.2s;
+        }
+
+        .approve-btn:hover {
+            background: #059669;
+            transform: scale(1.05);
+        }
+
+        footer {
+            padding: 2rem;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border-top: 2px solid rgba(255,255,255,0.05);
+        }
+
+        .input-area {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 1rem 4rem 1rem 1.5rem;
+            border-radius: 2rem;
+            color: white;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        #send-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--accent-color);
+            color: #0f172a;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DevAI</h1>
+        <div id="status" style="font-size: 0.8rem; color: #10b981">Online</div>
+    </header>
+
+    <div id="chat-container">
+        <div class="message ai-message">
+            Hi! I'm your DevAI architect. What would you like to build today?
+        </div>
+    </div>
+
+    <footer>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="e.g. deploy a FastAPI project with Docker..." autocomplete="off">
+            <button id="send-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        async function addMessage(text, role, plan = null) {
+            const div = document.createElement('div');
+            div.className = `message ${role}-message`;
+            div.textContent = text;
+
+            if (plan) {
+                const planDiv = document.createElement('div');
+                planDiv.className = 'plan-card';
+                planDiv.textContent = JSON.stringify(plan, null, 2);
+                div.appendChild(planDiv);
+
+                const btn = document.createElement('button');
+                btn.className = 'approve-btn';
+                btn.textContent = 'Approve & Execute';
+                btn.onclick = () => executePlan(plan, btn);
+                div.appendChild(btn);
+            }
+
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            userInput.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addMessage(data.message, 'ai', data.plan);
+                } else {
+                    addMessage(`Error: ${data.detail}`, 'ai');
+                }
+            } catch (err) {
+                addMessage('Failed to connect to backend.', 'ai');
+            }
+        }
+
+        async function executePlan(plan, btn) {
+            btn.disabled = true;
+            btn.textContent = 'Executing...';
+            try {
+                const response = await fetch('/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(plan)
+                });
+                const data = await response.json();
+                addMessage(data.message, 'ai');
+                btn.remove();
+            } catch (err) {
+                addMessage('Execution failed.', 'ai');
+                btn.disabled = false;
+                btn.textContent = 'Retry Execution';
+            }
+        }
+
+        sendBtn.onclick = sendMessage;
+        userInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+    </script>
+</body>
+</html>

@@ -18,10 +18,13 @@ from prompt_toolkit.history import FileHistory
 
 console = Console()
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
     """DevAI: AI-Powered DevOps Assistant."""
     init_db()
+    if ctx.invoked_subcommand is None:
+        interactive_chat()
 
 @cli.command()
 @click.argument('prompt', required=False)
@@ -160,7 +163,7 @@ def stop(project):
 @cli.command()
 def doctor():
     """Diagnose system health and configurations."""
-    console.print("[bold]DevAI Doctor ??[/bold]")
+    console.print("[bold]DevAI Doctor 🩺[/bold]")
     config = ConfigManager()
     active_model = config.config.get("active_model")
     console.print(f"Active Model: [green]{active_model}[/green]")
@@ -187,7 +190,7 @@ def deploy_repo(repo_url, server):
     repo_info = git.get_repo_info(local_path)
     
     console.print(f"[green]Repo ready:[/green] {local_path}")
-    console.print(f"[dim]Commit: {repo_info['commit'][:8]} � {repo_info['message']}[/dim]")
+    console.print(f"[dim]Commit: {repo_info['commit'][:8]} – {repo_info['message']}[/dim]")
 
     # Generate plan context using project detector
     context = ProjectDetector.get_project_summary()
@@ -244,7 +247,7 @@ def pipeline(project, server, user, output):
 
     gen = PipelineGenerator()
     path = gen.save_pipeline(output, project, server, user)
-    console.print(f"[green]? Pipeline created:[/green] {path}")
+    console.print(f"[green]✅ Pipeline created:[/green] {path}")
     console.print("[dim]Add SSH_PRIVATE_KEY to your GitHub repo secrets.[/dim]")
 
 @cli.command()
@@ -270,7 +273,7 @@ def analyze(project, service):
         console.print(f"[red]Server '{server_name}' not found.[/red]")
         return
 
-    console.print(f"[dim]?? Fetching logs for {project}...[/dim]")
+    console.print(f"[dim]📥 Fetching logs for {project}...[/dim]")
     collector = LogCollector(server['ip'], server['username'])
     try:
         logs_text = collector.fetch_logs(project, service, tail=200)
@@ -280,13 +283,13 @@ def analyze(project, service):
         collector.close()
 
     if not errors:
-        console.print("[green]? No errors detected in logs.[/green]")
+        console.print("[green]✅ No errors detected in logs.[/green]")
         return
 
     console.print(f"[yellow]Found {len(errors)} error lines. Running AI analysis...[/yellow]")
     analyzer = AIErrorAnalyzer()
     suggestion = analyzer.analyze_and_suggest(project, errors)
-    console.print("\n[bold red]?? AI Error Analysis:[/bold red]")
+    console.print("\n[bold red]🤖 AI Error Analysis:[/bold red]")
     console.print(suggestion)
 
 @cli.group()
@@ -382,7 +385,7 @@ def analyze_infra(project):
     console.print(f"[dim]Analyzing infrastructure footprints for {project}...[/dim]")
     analyzer = InfraAnalyzer()
     res = analyzer.analyze_infrastructure(health)
-    console.print("\n[bold cyan]??? Infrastructure Optimization Report:[/bold cyan]")
+    console.print("\n[bold cyan]🏛️ Infrastructure Optimization Report:[/bold cyan]")
     console.print(res)
 
 def interactive_chat():
@@ -439,7 +442,7 @@ def run_agent_task(task):
     """Assign a complex task to the autonomous agent manager."""
     from devai.agents.agent_manager import AgentManager
     am = AgentManager()
-    console.print(f"[dim]?? Assigning task: {task}[/dim]")
+    console.print(f"[dim]🤖 Assigning task: {task}[/dim]")
     res = am.run_task(task)
     console.print("\n[bold blue]Autonomous Agent Plan:[/bold blue]")
     console.print(res)
@@ -499,7 +502,7 @@ def advise(requirement):
     assistant = AIInfraAssistant()
     console.print(f"[dim]Consulting AI Architect on '{requirement}'...[/dim]")
     suggestion = assistant.suggest_architecture(requirement)
-    console.print("\n[bold cyan]??? AI Architecture Blueprint:[/bold cyan]")
+    console.print("\n[bold cyan]🏛️ AI Architecture Blueprint:[/bold cyan]")
     console.print(suggestion)
 
 @cli.group()
@@ -657,25 +660,34 @@ def run_devai_loop(user_input: str):
         from devai.projects.project_manager import EnvManager
         em = EnvManager()
         pe = PolicyEngine()
-        violations = pe.validate_plan(plan, em.active_env)
-        if violations:
+        decision = pe.evaluate(plan, em.active_env)
+        if decision.violations:
             console.print("[bold red]Policy Violations Detected:[/bold red]")
-            for v in violations:
-                console.print(f" - [{v['policy']}] {v['message']}")
+            for violation in decision.violations:
+                console.print(f" - [{violation.policy}] {violation.message}")
             if em.active_env == "production":
                 raise DevAIException("Policy violations block production deployments.")
-            else:
-                if not click.confirm("Proceed anyway?"):
-                    return
+            if not click.confirm("Proceed anyway?"):
+                return
+
+        if decision.warnings:
+            console.print("[bold yellow]Policy Warnings:[/bold yellow]")
+            for warning in decision.warnings:
+                console.print(f" - [{warning.policy}] {warning.message}")
 
         console.print("[green]Plan Validated! Executing Deterministically...[/green]")
 
         # 4. Execution
         registry = PluginRegistry()
         engine = ExecutionEngine(registry)
-        engine.execute(plan)
+        report = engine.execute(
+            plan,
+            approval_callback=lambda prompt: click.confirm(f"{prompt} Proceed?"),
+        )
         
         console.print("[bold green]Deployment complete![/bold green]")
+        for item in report.executed_resources:
+            console.print(f" - {item.name}: {item.status} ({item.detail})")
 
     except DevAIException as e:
         console.print(f"[bold red]DevAI Error:[/bold red] {str(e)}")
