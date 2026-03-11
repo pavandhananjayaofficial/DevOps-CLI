@@ -289,6 +289,102 @@ def analyze(project, service):
     console.print("\n[bold red]🤖 AI Error Analysis:[/bold red]")
     console.print(suggestion)
 
+@cli.group()
+def cluster():
+    """Manage Kubernetes clusters."""
+    pass
+
+@cluster.command(name="create")
+@click.argument("name")
+@click.option("--provider", "-p", default="mock", help="Cloud provider (aws, digitalocean, mock)")
+@click.option("--nodes", "-n", default=3, help="Number of worker nodes")
+def create_cluster(name, provider, nodes):
+    """Provision a new K8s cluster."""
+    from devai.cluster.cluster_manager import ClusterManager
+    cm = ClusterManager(provider)
+    res = cm.create_cluster(name, node_count=nodes)
+    console.print(f"[green]Cluster '{name}' provisioning started.[/green]")
+    console.print(f"Endpoint: {res['endpoint']}")
+
+@cli.command()
+@click.argument("project")
+@click.argument("replicas", type=int)
+def scale(project, replicas):
+    """Manually scale a project's replicas."""
+    from devai.orchestration.kubernetes_manager import KubernetesManager
+    # In a real app, this would update the state and apply the new manifest
+    console.print(f"[green]Scaling project '{project}' to {replicas} replicas...[/green]")
+    km = KubernetesManager()
+    km.apply_manifests(f"Updating deployment {project}")
+
+@cli.command()
+@click.argument("project")
+def heal(project):
+    """Trigger an autonomous self-healing probe for a project."""
+    from devai.incident.incident_manager import IncidentManager
+    from devai.monitoring.system_monitor import SystemMonitor
+    from devai.logs.log_collector import LogCollector
+    from devai.core.server_manager import ServerManager
+    from devai.memory.state_manager import StateManager
+
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found.[/red]")
+        return
+
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if not server:
+        return
+
+    mon = SystemMonitor(server['ip'], server['username'])
+    coll = LogCollector(server['ip'], server['username'])
+    
+    im = IncidentManager(mon, coll)
+    console.print(f"[dim]Running health probe for {project}...[/dim]")
+    incident = im.detect_incident(project) or {"type": "Manual Probe", "project": project}
+    
+    resolution = im.resolve_incident(incident)
+    console.print(f"\n[bold green]Healing Action:[/bold green]")
+    console.print(f"Action: {resolution['action']} on {resolution['name']}")
+    console.print(f"Reason: {resolution.get('properties', {}).get('reason', 'N/A')}")
+    
+    mon.close()
+    coll.close()
+
+@cli.command()
+@click.argument("project")
+def analyze_infra(project):
+    """Run AI-driven infrastructure optimization analysis."""
+    from devai.ai.infra_analyzer import InfraAnalyzer
+    from devai.monitoring.system_monitor import SystemMonitor
+    from devai.core.server_manager import ServerManager
+    from devai.memory.state_manager import StateManager
+
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found.[/red]")
+        return
+
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if not server:
+        return
+
+    mon = SystemMonitor(server['ip'], server['username'])
+    health = mon.get_health_summary(project)
+    mon.close()
+
+    console.print(f"[dim]Analyzing infrastructure footprints for {project}...[/dim]")
+    analyzer = InfraAnalyzer()
+    res = analyzer.analyze_infrastructure(health)
+    console.print("\n[bold cyan]🏛️ Infrastructure Optimization Report:[/bold cyan]")
+    console.print(res)
+
 def interactive_chat():
     """Interactive loop for chatting with DevAI."""
     console.print("[bold blue]DevAI Interactive Mode[/bold blue] (Type 'exit' to quit)")
@@ -331,6 +427,74 @@ def handle_slash_command(command: str):
                 console.print(f"[red]Error: {e}[/red]")
     else:
         console.print(f"[red]Unknown command: {cmd}[/red]")
+
+@cli.command()
+@click.argument("requirement")
+def advise(requirement):
+    """Ask the AI Infrastructure Assistant for architecture advice."""
+    from devai.ai.infra_assistant import AIInfraAssistant
+    assistant = AIInfraAssistant()
+    console.print(f"[dim]Consulting AI Architect on '{requirement}'...[/dim]")
+    suggestion = assistant.suggest_architecture(requirement)
+    console.print("\n[bold cyan]🏛️ AI Architecture Blueprint:[/bold cyan]")
+    console.print(suggestion)
+
+@cli.group()
+def project():
+    """Manage DevAI projects."""
+    pass
+
+@project.command(name="create")
+@click.argument("name")
+def create_project(name):
+    """Create a new project group."""
+    from devai.projects.project_manager import ProjectManager
+    pm = ProjectManager()
+    pm.create_project(name)
+    console.print(f"[green]Project '{name}' created.[/green]")
+
+@cli.group()
+def env():
+    """Manage deployment environments."""
+    pass
+
+@env.command(name="switch")
+@click.argument("name")
+def switch_env(name):
+    """Switch the active global environment (dev/staging/prod)."""
+    from devai.projects.project_manager import EnvManager
+    em = EnvManager()
+    em.switch_env(name)
+
+@cli.group()
+def template():
+    """Explore and use architecture templates."""
+    pass
+
+@template.command(name="list")
+def list_templates():
+    """List available architecture templates."""
+    from devai.templates.template_registry import TemplateRegistry
+    tr = TemplateRegistry()
+    templates = tr.list_templates()
+    table = Table(title="Template Marketplace")
+    table.add_column("ID", style="cyan")
+    table.add_column("Description", style="green")
+    for t in templates:
+        table.add_row(t['id'], t['description'])
+    console.print(table)
+
+@cli.command()
+def login():
+    """Login to the DevAI platform."""
+    from devai.auth.auth_manager import AuthManager
+    am = AuthManager()
+    username = click.prompt("Username")
+    password = click.prompt("Password", hide_input=True)
+    if am.login(username, password):
+        console.print(f"[green]Welcome back, {username}![/green]")
+    else:
+        console.print("[red]Login failed.[/red]")
 
 @cli.group()
 def secrets():
@@ -424,6 +588,23 @@ def run_devai_loop(user_input: str):
         validator = SchemaValidator()
         plan = validator.validate_plan(raw_plan)
         validator.enforce_security_policies(plan)
+
+        # 3.1 Policy Engine check (Phase 5)
+        from devai.policy.policy_engine import PolicyEngine
+        from devai.projects.project_manager import EnvManager
+        em = EnvManager()
+        pe = PolicyEngine()
+        violations = pe.validate_plan(plan, em.active_env)
+        if violations:
+            console.print("[bold red]Policy Violations Detected:[/bold red]")
+            for v in violations:
+                console.print(f" - [{v['policy']}] {v['message']}")
+            if em.active_env == "production":
+                raise DevAIException("Policy violations block production deployments.")
+            else:
+                if not click.confirm("Proceed anyway?"):
+                    return
+
         console.print("[green]Plan Validated! Executing Deterministically...[/green]")
 
         # 4. Execution

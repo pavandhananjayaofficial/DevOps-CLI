@@ -25,6 +25,13 @@ class PluginRegistry:
         self.connectors["ssh_server"] = SSHConnector()
         self.connectors["cloud_server"] = CloudConnector("mock")
         
+        # Load Phase 4 Connectors
+        try:
+            from devai.plugins.phase4_registry import register_phase4_connectors
+            register_phase4_connectors(self)
+        except ImportError:
+            pass
+        
         # Load external plugins
         eps = importlib.metadata.entry_points()
         if hasattr(eps, 'select'): # Python 3.10+
