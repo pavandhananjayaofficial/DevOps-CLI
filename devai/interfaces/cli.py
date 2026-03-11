@@ -174,12 +174,120 @@ def doctor():
     console.print("[green]System is ready for deployment.[/green]")
 
 @cli.command()
-def logs():
-    """View deployment logs."""
-    console.print("[dim]Recent Deployment Logs:[/dim]")
-    # For now, mock logs. In a real app, read from a logs file or DB.
-    console.print("2026-03-11 21:20:00 - DEPLOY - Success - nginx-srv")
-    console.print("2026-03-11 21:22:00 - DEPLOY - Success - redis-cache")
+@click.argument("repo_url")
+@click.option("--server", "-s", default=None, help="Target server name from registry")
+def deploy_repo(repo_url, server):
+    """Clone a Git repo and deploy it automatically."""
+    from devai.git.git_manager import GitManager
+    from devai.core.detector import ProjectDetector
+    from devai.core.server_manager import ServerManager
+
+    git = GitManager()
+    local_path = git.clone_or_pull(repo_url)
+    repo_info = git.get_repo_info(local_path)
+    
+    console.print(f"[green]Repo ready:[/green] {local_path}")
+    console.print(f"[dim]Commit: {repo_info['commit'][:8]} – {repo_info['message']}[/dim]")
+
+    # Generate plan context using project detector
+    context = ProjectDetector.get_project_summary()
+
+    # If server specified, run devai_loop with rich context
+    project_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
+    prompt = f"deploy project '{project_name}' on server '{server}'" if server else f"deploy project '{project_name}'"
+    run_devai_loop(prompt)
+
+@cli.command()
+@click.argument("project")
+def monitor(project):
+    """Show live health metrics for a deployed project."""
+    from devai.memory.state_manager import StateManager
+    from devai.core.server_manager import ServerManager
+    from devai.monitoring.system_monitor import SystemMonitor
+
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found.[/red]")
+        return
+
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if not server:
+        console.print(f"[red]Server '{server_name}' not found.[/red]")
+        return
+
+    mon = SystemMonitor(server['ip'], server['username'])
+    try:
+        health = mon.get_health_summary(project)
+        table = Table(title=f"Health: {project}")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("CPU Usage", health['cpu_usage'])
+        table.add_row("Memory", health['memory_usage'])
+        table.add_row("Disk", health['disk_usage'])
+        console.print(table)
+        console.print("\n[bold]Container Status:[/bold]")
+        console.print(health['containers'])
+    finally:
+        mon.close()
+
+@cli.command()
+@click.argument("project")
+@click.option("--server", "-s", required=True, help="Server IP for the pipeline")
+@click.option("--user", "-u", default="root", help="SSH username")
+@click.option("--output", "-o", default=".", help="Output directory for pipeline file")
+def pipeline(project, server, user, output):
+    """Generate a GitHub Actions CI/CD pipeline."""
+    from devai.cicd.pipeline_generator import PipelineGenerator
+
+    gen = PipelineGenerator()
+    path = gen.save_pipeline(output, project, server, user)
+    console.print(f"[green]✅ Pipeline created:[/green] {path}")
+    console.print("[dim]Add SSH_PRIVATE_KEY to your GitHub repo secrets.[/dim]")
+
+@cli.command()
+@click.argument("project")
+@click.option("--service", "-s", default=None, help="Specific service name")
+def analyze(project, service):
+    """Collect logs and run AI error analysis."""
+    from devai.memory.state_manager import StateManager
+    from devai.core.server_manager import ServerManager
+    from devai.logs.log_collector import LogCollector
+    from devai.ai.error_analyzer import AIErrorAnalyzer
+
+    resources = StateManager.get_all_resources()
+    p_meta = next((r for r in resources if r['name'] == project), None)
+    if not p_meta:
+        console.print(f"[red]Project '{project}' not found.[/red]")
+        return
+
+    server_name = p_meta['properties'].get("server", "default")
+    servers = ServerManager.list_servers()
+    server = next((s for s in servers if s['name'] == server_name), None)
+    if not server:
+        console.print(f"[red]Server '{server_name}' not found.[/red]")
+        return
+
+    console.print(f"[dim]📥 Fetching logs for {project}...[/dim]")
+    collector = LogCollector(server['ip'], server['username'])
+    try:
+        logs_text = collector.fetch_logs(project, service, tail=200)
+        collector.save_logs(project, logs_text)
+        errors = collector.analyze_errors(logs_text)
+    finally:
+        collector.close()
+
+    if not errors:
+        console.print("[green]✅ No errors detected in logs.[/green]")
+        return
+
+    console.print(f"[yellow]Found {len(errors)} error lines. Running AI analysis...[/yellow]")
+    analyzer = AIErrorAnalyzer()
+    suggestion = analyzer.analyze_and_suggest(project, errors)
+    console.print("\n[bold red]🤖 AI Error Analysis:[/bold red]")
+    console.print(suggestion)
 
 def interactive_chat():
     """Interactive loop for chatting with DevAI."""

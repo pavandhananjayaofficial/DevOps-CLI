@@ -23,128 +23,43 @@ class ExecutionEngine:
         """Plugin entry point for new infrastructure providers."""
         self.registry.connectors[resource_type] = connector
 
-    def _build_dag(self, resources: List[ResourceDefinition]) -> List[ResourceDefinition]:
+    def execute(self, plan: DeploymentPlan):
         """
-        Performs a topological sort securely resolving the Directed Acyclic Graph.
+        Executes the plan by building a dependency graph and running tasks in order.
         """
-        # Map resource names to their definitions
-        resource_map = {r.name: r for r in resources}
+        print(f"🚀 Executing Deployment Plan: {plan.description}")
         
-        # Build adjacency list
-        in_degree: Dict[str, int] = {r.name: 0 for r in resources}
-        adj_list: Dict[str, List[str]] = {r.name: [] for r in resources}
+        # 1. Dependency Resolution (DAG)
+        adj_list = {r.name: r.depends_on for r in plan.resources}
+        in_degree = {r.name: 0 for r in plan.resources}
         
-        for r in resources:
-            for dep in r.depends_on:
-                if dep not in resource_map:
-                    raise ExecutionError(f"Resource '{r.name}' depends on '{dep}', but '{dep}' is missing from the plan.")
-                adj_list[dep].append(r.name)
-                in_degree[r.name] += 1
-                
-        # Queue for nodes with no incoming dependencies
-        queue: Deque[str] = deque([name for name in in_degree if in_degree[name] == 0])
-        sorted_order: List[ResourceDefinition] = []
+        for name in adj_list:
+            for dep in adj_list[name]:
+                if dep in in_degree:
+                    in_degree[name] += 1
+        
+        # 2. Kahn's Algorithm for Topological Sort
+        queue: Deque[str] = deque([r for r, d in in_degree.items() if d == 0])
+        sorted_order = []
         
         while queue:
-            current = queue.popleft()
-            sorted_order.append(resource_map[current])
+            node = queue.popleft()
+            sorted_order.append(node)
             
-            for neighbor in adj_list[current]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-                    
-        SYSTEM_PROMPT = """
-    You are an AI DevOps Architect. 
-    Your job is to generate a valid multi-service deployment plan in JSON format.
-    
-    ### Guidelines:
-    - ONLY output valid JSON.
-    - Resources must be deterministic.
-    - Valid types: multi_service_deployment, vps_server.
-    
-    ### Multi-Service Schema Example:
-    {
-      "resources": [
-        {
-          "name": "project_name",
-          "type": "multi_service_deployment",
-          "action": "CREATE",
-          "properties": {
-            "server": "server_alias_or_default",
-            "services": [
-              {
-                "name": "api",
-                "image": "my-api:latest",
-                "ports": ["8000:8000"],
-                "env": ["DB_HOST=postgres"]
-              },
-              {
-                "name": "postgres",
-                "image": "postgres:latest",
-                "env": ["POSTGRES_PASSWORD=secret"]
-              }
-            ],
-            "env": {
-               "GLOBAL_KEY": "val"
-            }
-          }
-        }
-      ]
-    }
-
-    Orchestration Rules:
-    - For `vps_server`, include a `commands` list for bootstrap (apt install docker, ufw allow 80).
-    - For `multi_service_deployment`, define each service and their dependencies.
-    - Always prefer Docker-based deployments on VPS.
-
-    Example VPS Output:
-    {
-      "name": "VPS Setup",
-      "version": "1.0",
-      "resources": [
-        {
-          "name": "web-host",
-          "type": "vps_server",
-          "action": "setup",
-          "properties": {
-            "host": "1.2.3.4",
-            "username": "root",
-            "commands": ["apt update", "apt install -y docker.io"]
-          }
-        }
-      ]
-    }
-    """
-        if len(sorted_order) != len(resources):
+            for name, deps in adj_list.items():
+                if node in deps:
+                    in_degree[name] -= 1
+                    if in_degree[name] == 0:
+                        queue.append(name)
+                        
+        if len(sorted_order) != len(plan.resources):
             raise ExecutionError("Circular dependency detected in the deployment plan DAG!")
             
-        return sorted_order
-
-    def execute(self, plan: DeploymentPlan):
-        """Executes the plan deterministically according to the Dependency DAG."""
-        print(f"Executing Plan: {plan.description} (Version: {plan.version})")
-        print("Dependency DAG Resolved Successfully.\n")
-        
-        try:
-            sorted_resources = self._build_dag(plan.resources)
-        except Exception as e:
-            raise ExecutionError(f"Failed to resolve execution DAG: {str(e)}")
-            
-        for resource in sorted_resources:
-            connector = self.registry.get_connector(resource.type)
-            if not connector:
-                print(f"Warning: No connector registered for type '{resource.type}'. Skipping {resource.name}.")
-                continue
-                
-            if resource.action == ActionType.CREATE or resource.action == ActionType.UPDATE:
-                connector.apply(resource.name, resource.properties)
-                StateManager.update_resource(resource.name, resource.type, resource.properties, "deployed")
-            elif resource.action == ActionType.DELETE:
-                connector.destroy(resource.name, resource.properties)
-                StateManager.delete_resource(resource.name)
-            else:
-                print(f"Action '{resource.action}' for resource '{resource.name}' is unsupported.")
+        # 3. Execution Loop
+        resource_map = {r.name: r for r in plan.resources}
+        for res_name in sorted_order:
+            resource = resource_map[res_name]
+            self._execute_resource(resource)
 
     def _execute_resource(self, resource: ResourceDefinition):
         """

@@ -22,8 +22,11 @@ class AIPlanner:
     - ONLY output valid JSON.
     - Resources must be deterministic.
     - Valid types: multi_service_deployment, vps_server.
+    - Orchestration Rules:
+        - For vps_server, include a 'commands' list for bootstrap.
+        - Always prefer Docker-based deployments on VPS.
     
-    ### Multi-Service Schema Example:
+    ### Schema Example:
     {
       "resources": [
         {
@@ -31,46 +34,10 @@ class AIPlanner:
           "type": "multi_service_deployment",
           "action": "CREATE",
           "properties": {
-            "server": "server_alias_or_default",
+            "server": "server_alias",
             "services": [
-              {
-                "name": "api",
-                "image": "my-api:latest",
-                "ports": ["8000:8000"],
-                "env": ["DB_HOST=postgres"]
-              },
-              {
-                "name": "postgres",
-                "image": "postgres:latest",
-                "env": ["POSTGRES_PASSWORD=secret"]
-              }
-            ],
-            "env": {
-               "GLOBAL_KEY": "val"
-            }
-          }
-        }
-      ]
-    }
-    """
-    Orchestration Rules:
-    - For `vps_server`, include a `commands` list for bootstrap (apt install docker, ufw allow 80).
-    - For `multi_service_deployment`, define each service and their dependencies.
-    - Always prefer Docker-based deployments on VPS.
-
-    Example VPS Output:
-    {
-      "name": "VPS Setup",
-      "version": "1.0",
-      "resources": [
-        {
-          "name": "web-host",
-          "type": "vps_server",
-          "action": "setup",
-          "properties": {
-            "host": "1.2.3.4",
-            "username": "root",
-            "commands": ["apt update", "apt install -y docker.io"]
+              {"name": "api", "image": "api:latest"}
+            ]
           }
         }
       ]
@@ -79,7 +46,6 @@ class AIPlanner:
 
     def __init__(self, provider_name: Optional[str] = None):
         self.config_manager = ConfigManager()
-        self.context = ""
         if not provider_name:
             provider_name = self.config_manager.config.get("active_model", "openai")
         
@@ -98,16 +64,10 @@ class AIPlanner:
             return MockProvider(config)
 
     def generate_plan(self, prompt: str, context: str = "") -> str:
-        """
-        Takes the user intent and asks the AI to generate a JSON plan.
-        """
         # Save user message
         HistoryManager.add_message("user", prompt)
-        
-        # Get context
         history = HistoryManager.get_recent_history(limit=5)
-        
-        full_prompt = f"PROJECT CONTEXT:\n{context}\n\nUSER REQUEST: {prompt}" if context else prompt
+        full_prompt = f"CONTEXT:\n{context}\n\nREQUEST: {prompt}" if context else prompt
         
         raw_output = self.provider.generate_response(
             prompt=full_prompt,
@@ -115,16 +75,7 @@ class AIPlanner:
             history=history
         )
             
-        # Save AI response
         HistoryManager.add_message("ai", raw_output)
-            
-        # Clean up potential markdown formatting
-        raw_output = raw_output.strip()
-        if raw_output.startswith("```json"):
-            raw_output = raw_output[7:-3]
-        elif raw_output.startswith("```"):
-            raw_output = raw_output[3:-3]
-            
         return raw_output.strip()
 
     def get_active_model_info(self):
