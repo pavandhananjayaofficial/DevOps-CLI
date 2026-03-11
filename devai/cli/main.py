@@ -15,6 +15,10 @@ import sys
 import subprocess
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.live import Live
+from rich.text import Text
 
 console = Console()
 
@@ -391,46 +395,110 @@ def analyze_infra(project):
 
 def interactive_chat():
     """Interactive loop for chatting with DevAI."""
-    console.print("[bold blue]DevAI Interactive Mode[/bold blue] (Type 'exit' to quit)")
-    session = PromptSession(history=FileHistory(os.path.expanduser("~/.devai/history")))
+    welcome_msg = Text.assemble(
+        ("DevAI Interactive Mode\n", "bold blue"),
+        ("AI-Powered DevOps Assistant\n", "cyan"),
+        ("Type ", "dim"), ("/help", "bold yellow"), (" to see available commands", "dim")
+    )
+    console.print(Panel(welcome_msg, border_style="blue", expand=False))
+    
+    config = ConfigManager()
     
     while True:
         try:
-            user_input = session.prompt("devai> ")
+            active_model = config.config.get("active_model", "none")
+            prompt_text = f"[bold green]devai({active_model})[/bold green] ❯ "
+            
+            user_input = Prompt.ask(prompt_text).strip()
+            
+            if not user_input:
+                continue
+                
             if user_input.lower() in ["exit", "quit"]:
+                console.print("[dim]Exiting DevAI...[/dim]")
                 break
+                
             if user_input.startswith("/"):
                 handle_slash_command(user_input)
                 continue
             
             run_devai_loop(user_input)
         except KeyboardInterrupt:
+            console.print("\n[dim]Use 'exit' to quit.[/dim]")
             continue
         except EOFError:
             break
 
 def handle_slash_command(command: str):
     parts = command.split()
-    cmd = parts[0]
+    cmd = parts[0].lower()
     config = ConfigManager()
 
     if cmd == "/model":
         if len(parts) == 1:
             active = config.config.get("active_model")
-            console.print(f"Current model: [bold green]{active}[/bold green]")
+            console.print(f"Active model: [bold green]{active}[/bold green]")
         elif parts[1] == "list":
-            models = config.config.get("models", {}).keys()
-            console.print("Available models:")
-            for m in models:
-                console.print(f" - {m}")
+            models = config.list_models()
+            table = Table(title="Available Models")
+            table.add_column("Provider", style="cyan")
+            table.add_column("Model ID", style="green")
+            table.add_column("Status", style="magenta")
+            
+            active = config.config.get("active_model")
+            for name, m_config in models.items():
+                status = "ACTIVE" if name == active else ""
+                table.add_row(name, m_config.get("model", "N/A"), status)
+            console.print(table)
+            
+        elif parts[1] == "add" and len(parts) > 2:
+            provider = parts[2]
+            console.print(f"[bold]Configuring {provider}...[/bold]")
+            api_key = click.prompt(f"Enter {provider} API key", hide_input=True)
+            model_id = click.prompt("Model ID", default="gpt-4o" if provider == "openai" else "claude-3-5-sonnet-20240620")
+            
+            config.add_model(provider, {
+                "type": "api",
+                "provider": provider,
+                "api_key": api_key,
+                "model": model_id
+            })
+            console.print(f"[green]✅ {provider} model added successfully.[/green]")
+            
         elif parts[1] == "use" and len(parts) > 2:
             try:
                 config.set_active_model(parts[2])
                 console.print(f"Switched to [bold green]{parts[2]}[/bold green]")
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
+        elif parts[1] == "remove" and len(parts) > 2:
+            try:
+                config.remove_model(parts[2])
+                console.print(f"[yellow]Removed model {parts[2]}[/yellow]")
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+    elif cmd == "/help":
+        table = Table(title="Slash Commands")
+        table.add_column("Command", style="yellow")
+        table.add_column("Description", style="dim")
+        table.add_row("/model list", "List configured AI models")
+        table.add_row("/model add <name>", "Interactively add a new provider")
+        table.add_row("/model use <name>", "Switch active AI model")
+        table.add_row("/model remove <name>", "Remove a model configuration")
+        table.add_row("/config", "Show current system configuration")
+        table.add_row("/help", "Show this help menu")
+        table.add_row("exit", "Exit interactive mode")
+        console.print(table)
+    elif cmd == "/config":
+        console.print("[bold]DevAI Configuration:[/bold]")
+        # Mask API keys for safety
+        clean_config = config.config.copy()
+        for m in clean_config.get("models", {}).values():
+            if "api_key" in m:
+                m["api_key"] = "****" + m["api_key"][-4:] if len(m["api_key"]) > 4 else "****"
+        console.print(clean_config)
     else:
-        console.print(f"[red]Unknown command: {cmd}[/red]")
+        console.print(f"[red]Unknown command: {cmd}. Type /help for assistance.[/red]")
 
 @cli.group()
 def agent():
