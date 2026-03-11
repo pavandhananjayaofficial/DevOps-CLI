@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from devai.ai.planner import AIPlanner
+from devai.planner.deployment_planner import AIPlanner
 
 class AgentManager:
     """
