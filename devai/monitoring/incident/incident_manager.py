@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from devai.monitoring.system_monitor import SystemMonitor
-from devai.logs.log_collector import LogCollector
-from devai.ai.error_analyzer import AIErrorAnalyzer
+from devai.monitoring.logs.log_collector import LogCollector
+from devai.planner.error_analyzer import AIErrorAnalyzer
 
 class IncidentManager:
     """

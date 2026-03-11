@@ -3,12 +3,12 @@ from typing import Deque, Optional
 
 from devai.audit.audit_logger import AuditLogger
 from devai.connectors.base import ConnectorBase
-from devai.core.exceptions import DevAIException, ExecutionError
-from devai.core.models import ActionType, DeploymentPlan, ExecutedResource, ExecutionReport, ResourceDefinition
-from devai.core.server_manager import ServerManager
+from devai.utils.core.exceptions import DevAIException, ExecutionError
+from devai.utils.core.models import DeploymentPlan, ExecutedResource, ExecutionReport, ResourceDefinition
+from devai.utils.core.server_manager import ServerManager
 from devai.execution.approvals import ApprovalCallback, ApprovalGate
 from devai.execution.registry import ExecutorRegistry
-from devai.memory.state_manager import StateManager
+from devai.database.models import StateManager
 from devai.plugins.registry import PluginRegistry
 from devai.server.deployment_manager import DeploymentManager
 

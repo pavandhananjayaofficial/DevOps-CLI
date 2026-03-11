@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 
 class AIErrorAnalyzer:
@@ -14,7 +14,7 @@ class AIErrorAnalyzer:
         """
         Sends error lines to the AI provider and returns a fix suggestion.
         """
-        from devai.ai.planner import AIPlanner
+        from devai.planner.deployment_planner import AIPlanner
 
         if not error_lines:
             return "✅ No errors found in the provided logs."

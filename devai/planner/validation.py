@@ -1,8 +1,8 @@
 from typing import Any
 
 from pydantic import ValidationError as PydanticValidationError
-from devai.core.models import DeploymentPlan
-from devai.core.exceptions import ValidationError
+from devai.utils.core.models import DeploymentPlan
+from devai.utils.core.exceptions import ValidationError
 
 
 class SchemaValidator:

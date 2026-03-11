@@ -1,4 +1,4 @@
-from devai.core.models import DeploymentPlan, PolicyDecision, PolicyViolation, RiskLevel
+from devai.utils.core.models import DeploymentPlan, PolicyDecision, PolicyViolation, RiskLevel
 
 
 class PolicyEngine:
