@@ -1,6 +1,6 @@
 from typing import List, Optional
 import paramiko
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 class SSHExecutor:
     """

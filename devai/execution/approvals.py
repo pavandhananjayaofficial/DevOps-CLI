@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from devai.core.exceptions import ApprovalRequiredError
-from devai.core.models import DeploymentPlan, ResourceDefinition
+from devai.utils.core.exceptions import ApprovalRequiredError
+from devai.utils.core.models import DeploymentPlan, ResourceDefinition
 
 
 ApprovalCallback = Callable[[str], bool]

@@ -2,7 +2,7 @@ import os
 import json
 from typing import Dict, Optional
 from cryptography.fernet import Fernet
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 class VaultManager:
     """

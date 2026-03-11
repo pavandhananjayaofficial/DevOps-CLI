@@ -69,6 +69,40 @@ class SafetyPipelineTests(unittest.TestCase):
         self.assertTrue(decision.requires_manual_approval)
         self.assertTrue(any(item.policy == "production_change_control" for item in decision.violations))
 
+    def test_plan_converts_resources_into_typed_actions(self):
+        plan = DeploymentPlan(
+            description="Deploy app",
+            resources=[
+                ResourceDefinition(
+                    name="api",
+                    type="docker_container",
+                    action=ActionType.CREATE,
+                    properties={"image": "api:v2"},
+                ),
+                ResourceDefinition(
+                    name="platform",
+                    type="multi_service_deployment",
+                    action=ActionType.UPDATE,
+                    properties={
+                        "server": "staging",
+                        "services": [
+                            {"name": "api", "image": "api:v2"},
+                            {"name": "worker", "image": "worker:v2"},
+                        ],
+                    },
+                    depends_on=["api"],
+                    risk=RiskLevel.MEDIUM,
+                ),
+            ],
+        )
+
+        actions = plan.to_actions()
+
+        self.assertEqual(len(actions), 2)
+        self.assertEqual(actions[0].resource_name, "api")
+        self.assertIn("Docker container", actions[0].summary)
+        self.assertIn("multi-service deployment", actions[1].summary)
+
     def test_execution_engine_blocks_high_risk_plan_without_approval(self):
         registry = PluginRegistry()
         connector = DummyConnector()
@@ -90,6 +124,36 @@ class SafetyPipelineTests(unittest.TestCase):
         engine = ExecutionEngine(registry=registry)
         with self.assertRaises(ApprovalRequiredError):
             engine.execute(plan)
+
+    def test_execution_engine_preview_respects_dependency_order(self):
+        registry = PluginRegistry()
+        connector = DummyConnector()
+        registry.connectors["docker_container"] = connector
+
+        plan = DeploymentPlan(
+            description="Preview deploy",
+            resources=[
+                ResourceDefinition(
+                    name="db",
+                    type="docker_container",
+                    action=ActionType.CREATE,
+                    properties={"image": "postgres:15"},
+                ),
+                ResourceDefinition(
+                    name="api",
+                    type="docker_container",
+                    action=ActionType.CREATE,
+                    properties={"image": "api:v2"},
+                    depends_on=["db"],
+                ),
+            ],
+        )
+
+        engine = ExecutionEngine(registry=registry)
+        preview = engine.preview(plan)
+
+        self.assertEqual(preview.actions[0].action_id, "db:create")
+        self.assertEqual(preview.actions[1].action_id, "api:create")
 
     def test_execution_engine_runs_with_explicit_approval(self):
         registry = PluginRegistry()

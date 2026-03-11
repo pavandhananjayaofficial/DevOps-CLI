@@ -1,13 +1,13 @@
 import click
 from rich.console import Console
 from rich.table import Table
-from devai.agent.intent.parser import IntentParser
+from devai.intent.parser import IntentParser
 from devai.planner.deployment_planner import AIPlanner
 from devai.planner.validation import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.connectors.docker import DockerConnector
 from devai.plugins.registry import PluginRegistry
-from devai.utils.core.exceptions import DevAIException
+from devai.core.exceptions import DevAIException
 from devai.database.db_manager import init_db
 from devai.config.config_loader import ConfigManager
 import os
@@ -28,12 +28,13 @@ def cli(ctx):
 
 @cli.command()
 @click.argument('prompt', required=False)
-def deploy(prompt: str):
+@click.option('--dry-run', is_flag=True, help='Validate and preview the plan without executing it.')
+def deploy(prompt: str, dry_run: bool):
     """Deploy infrastructure using natural language."""
     if not prompt:
         prompt = click.prompt("What would you like to deploy?")
     
-    run_devai_loop(prompt)
+    run_devai_loop(prompt, dry_run=dry_run)
 
 @cli.command()
 def start():
@@ -49,7 +50,7 @@ def start():
 def status(name):
     """Check the status of projects and resources."""
     from devai.database.models import StateManager
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     # 1. Local/Logical Status
@@ -89,7 +90,7 @@ def status(name):
 def logs(project, service, tail):
     """View logs from a remote project."""
     from devai.database.models import StateManager
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -115,7 +116,7 @@ def logs(project, service, tail):
 def restart(project, service):
     """Restart a remote project or service."""
     from devai.database.models import StateManager
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -140,7 +141,7 @@ def restart(project, service):
 def stop(project):
     """Stop a remote project."""
     from devai.database.models import StateManager
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.execution.docker_manager import DockerManager
     
     resources = StateManager.get_all_resources()
@@ -183,7 +184,7 @@ def deploy_repo(repo_url, server):
     """Clone a Git repo and deploy it automatically."""
     from devai.connectors.git.git_manager import GitManager
     from devai.utils.detector import ProjectDetector
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
 
     git = GitManager()
     local_path = git.clone_or_pull(repo_url)
@@ -205,7 +206,7 @@ def deploy_repo(repo_url, server):
 def monitor(project):
     """Show live health metrics for a deployed project."""
     from devai.database.models import StateManager
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.monitoring.system_monitor import SystemMonitor
 
     resources = StateManager.get_all_resources()
@@ -256,7 +257,7 @@ def pipeline(project, server, user, output):
 def analyze(project, service):
     """Collect logs and run AI error analysis."""
     from devai.database.models import StateManager
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.monitoring.logs.log_collector import LogCollector
     from devai.planner.error_analyzer import AIErrorAnalyzer
 
@@ -327,7 +328,7 @@ def heal(project):
     from devai.monitoring.incident.incident_manager import IncidentManager
     from devai.monitoring.system_monitor import SystemMonitor
     from devai.monitoring.logs.log_collector import LogCollector
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.database.models import StateManager
 
     resources = StateManager.get_all_resources()
@@ -363,7 +364,7 @@ def analyze_infra(project):
     """Run AI-driven infrastructure optimization analysis."""
     from devai.planner.infra_planner import InfraAnalyzer
     from devai.monitoring.system_monitor import SystemMonitor
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     from devai.database.models import StateManager
 
     resources = StateManager.get_all_resources()
@@ -600,13 +601,13 @@ def server():
 @click.argument("username")
 def add_server(name, ip, username):
     """Register a new VPS server."""
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     ServerManager.add_server(name, ip, username)
 
 @server.command(name="list")
 def list_servers():
     """List all managed servers."""
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     servers = ServerManager.list_servers()
     if not servers:
         console.print("[dim]No servers registered.[/dim]")
@@ -624,7 +625,7 @@ def list_servers():
 @click.argument("name")
 def remove_server(name):
     """Remove a server from the registry."""
-    from devai.utils.core.server_manager import ServerManager
+    from devai.core.server_manager import ServerManager
     ServerManager.remove_server(name)
 
 @server.command(name="setup")
@@ -634,7 +635,18 @@ def setup_server(name):
     from devai.core.server_manager import ServerManager
     ServerManager.setup_server(name)
 
-def run_devai_loop(user_input: str):
+def _render_dry_run_preview(preview):
+    table = Table(title="Execution Preview")
+    table.add_column("#", style="cyan")
+    table.add_column("Action", style="green")
+    table.add_column("Risk", style="yellow")
+    table.add_column("Approval", style="magenta")
+    for item in preview.actions:
+        table.add_row(str(item.order), item.summary, item.risk.value, "yes" if item.requires_approval else "no")
+    console.print(table)
+
+
+def run_devai_loop(user_input: str, dry_run: bool = False):
     try:
         # 0. Context Gathering
         from devai.utils.detector import ProjectDetector
@@ -656,8 +668,8 @@ def run_devai_loop(user_input: str):
         validator.enforce_security_policies(plan)
 
         # 3.1 Policy Engine check (Phase 5)
-        from devai.security.policy.policy_engine import PolicyEngine
-        from devai.environments.project_manager import EnvManager
+        from devai.policy.policy_engine import PolicyEngine
+        from devai.projects.project_manager import EnvManager
         em = EnvManager()
         pe = PolicyEngine()
         decision = pe.evaluate(plan, em.active_env)
@@ -675,11 +687,17 @@ def run_devai_loop(user_input: str):
             for warning in decision.warnings:
                 console.print(f" - [{warning.policy}] {warning.message}")
 
-        console.print("[green]Plan Validated! Executing Deterministically...[/green]")
-
-        # 4. Execution
         registry = PluginRegistry()
         engine = ExecutionEngine(registry)
+        preview = engine.preview(plan)
+        console.print("[bold cyan]Dry-Run Preview[/bold cyan]")
+        _render_dry_run_preview(preview)
+
+        if dry_run:
+            console.print("[green]Dry run complete. No changes were executed.[/green]")
+            return
+
+        console.print("[green]Plan Validated! Executing Deterministically...[/green]")
         report = engine.execute(
             plan,
             approval_callback=lambda prompt: click.confirm(f"{prompt} Proceed?"),
@@ -696,4 +714,6 @@ def run_devai_loop(user_input: str):
 
 if __name__ == "__main__":
     cli()
+
+
 

@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Optional
 from devai.execution.ssh_executor import SSHExecutor
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 class VPSConnector:
     """

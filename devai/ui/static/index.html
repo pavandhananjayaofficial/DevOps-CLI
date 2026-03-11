@@ -8,20 +8,14 @@
     <style>
         :root {
             --bg-color: #0f172a;
-            --container-bg: #1e293b;
             --accent-color: #38bdf8;
             --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
             --message-user: #0369a1;
             --message-ai: #334155;
             --glass: rgba(30, 41, 59, 0.7);
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: 'Inter', sans-serif;
@@ -33,10 +27,14 @@
             overflow: hidden;
         }
 
-        header {
+        header, footer {
             padding: 1.5rem 2rem;
             background: var(--glass);
             backdrop-filter: blur(10px);
+            border-color: rgba(255,255,255,0.05);
+        }
+
+        header {
             border-bottom: 2px solid rgba(255,255,255,0.05);
             display: flex;
             justify-content: space-between;
@@ -46,7 +44,6 @@
         header h1 {
             font-family: 'Outfit', sans-serif;
             font-size: 1.5rem;
-            letter-spacing: -0.5px;
             background: linear-gradient(90deg, #38bdf8, #818cf8);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -59,7 +56,6 @@
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
-            scroll-behavior: smooth;
         }
 
         .message {
@@ -68,12 +64,6 @@
             border-radius: 1.5rem;
             line-height: 1.5;
             font-size: 0.95rem;
-            animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
         }
 
         .user-message {
@@ -96,6 +86,7 @@
             margin-top: 1rem;
             font-family: monospace;
             font-size: 0.85rem;
+            white-space: pre-wrap;
         }
 
         .approve-btn {
@@ -107,26 +98,9 @@
             cursor: pointer;
             font-weight: 600;
             margin-top: 1rem;
-            transition: all 0.2s;
         }
 
-        .approve-btn:hover {
-            background: #059669;
-            transform: scale(1.05);
-        }
-
-        footer {
-            padding: 2rem;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border-top: 2px solid rgba(255,255,255,0.05);
-        }
-
-        .input-area {
-            max-width: 800px;
-            margin: 0 auto;
-            position: relative;
-        }
+        .input-area { max-width: 800px; margin: 0 auto; position: relative; }
 
         input {
             width: 100%;
@@ -136,13 +110,9 @@
             border-radius: 2rem;
             color: white;
             font-size: 1rem;
-            transition: border-color 0.2s;
         }
 
-        input:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
+        input:focus { outline: none; border-color: var(--accent-color); }
 
         #send-btn {
             position: absolute;
@@ -156,9 +126,6 @@
             height: 40px;
             border-radius: 50%;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
     </style>
 </head>
@@ -169,17 +136,13 @@
     </header>
 
     <div id="chat-container">
-        <div class="message ai-message">
-            Hi! I'm your DevAI architect. What would you like to build today?
-        </div>
+        <div class="message ai-message">Hi! I'm your DevAI architect. What would you like to build today?</div>
     </div>
 
     <footer>
         <div class="input-area">
             <input type="text" id="user-input" placeholder="e.g. deploy a FastAPI project with Docker..." autocomplete="off">
-            <button id="send-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </button>
+            <button id="send-btn">Go</button>
         </div>
     </footer>
 
@@ -188,22 +151,24 @@
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
 
-        async function addMessage(text, role, plan = null) {
+        function addMessage(text, role, payload = null) {
             const div = document.createElement('div');
             div.className = `message ${role}-message`;
             div.textContent = text;
 
-            if (plan) {
+            if (payload) {
                 const planDiv = document.createElement('div');
                 planDiv.className = 'plan-card';
-                planDiv.textContent = JSON.stringify(plan, null, 2);
+                planDiv.textContent = JSON.stringify(payload, null, 2);
                 div.appendChild(planDiv);
 
-                const btn = document.createElement('button');
-                btn.className = 'approve-btn';
-                btn.textContent = 'Approve & Execute';
-                btn.onclick = () => executePlan(plan, btn);
-                div.appendChild(btn);
+                if (payload.plan) {
+                    const btn = document.createElement('button');
+                    btn.className = 'approve-btn';
+                    btn.textContent = 'Approve & Execute';
+                    btn.onclick = () => executePlan(payload.plan, btn);
+                    div.appendChild(btn);
+                }
             }
 
             chatContainer.appendChild(div);
@@ -224,7 +189,7 @@
                     body: JSON.stringify({ message: text })
                 });
                 const data = await response.json();
-                
+
                 if (response.ok) {
                     addMessage(data.message, 'ai', data.plan);
                 } else {
@@ -242,11 +207,17 @@
                 const response = await fetch('/execute', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(plan)
+                    body: JSON.stringify({ plan, approved: true })
                 });
                 const data = await response.json();
-                addMessage(data.message, 'ai');
-                btn.remove();
+                if (response.ok) {
+                    addMessage(data.message, 'ai', data.plan);
+                    btn.remove();
+                    return;
+                }
+                addMessage(`Execution failed: ${data.detail}`, 'ai');
+                btn.disabled = false;
+                btn.textContent = 'Retry Execution';
             } catch (err) {
                 addMessage('Execution failed.', 'ai');
                 btn.disabled = false;

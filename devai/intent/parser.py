@@ -32,3 +32,4 @@ class IntentParser:
         else:
             category = IntentCategory.UNKNOWN
         return ParsedIntent(original_text=text, category=category, confidence=0.75)
+

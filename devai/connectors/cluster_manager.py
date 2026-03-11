@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from devai.core.exceptions import DevAIException
+from devai.utils.core.exceptions import DevAIException
 
 class ClusterManager:
     """

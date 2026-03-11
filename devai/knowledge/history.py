@@ -1,6 +1,6 @@
 from typing import List
 from sqlmodel import select, desc
-from devai.memory.database import get_session, Message
+from devai.knowledge.database import get_session, Message
 
 class HistoryManager:
     """

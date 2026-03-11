@@ -2,8 +2,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from devai.intent.parser import IntentParser
-from devai.ai.planner import AIPlanner
-from devai.validation.validator import SchemaValidator
+from devai.planner.deployment_planner import AIPlanner
+from devai.planner.validation import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.plugins.registry import PluginRegistry
 from devai.core.exceptions import DevAIException
@@ -18,7 +18,7 @@ registry.load_plugins()
 
 @app.get("/")
 async def get_index():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
+    return FileResponse(os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui", "static", "index.html"))
 
 
 class ChatRequest(BaseModel):
@@ -49,13 +49,15 @@ async def chat_endpoint(request: ChatRequest):
         validated_plan = validator.validate_plan(raw_plan)
         validator.enforce_security_policies(validated_plan)
         policy = PolicyEngine().evaluate(validated_plan, validated_plan.metadata.environment)
+        preview = ExecutionEngine(registry=registry).preview(validated_plan)
 
         return ChatResponse(
             status="planned",
-            message="Plan generated and validated. Explicit approval is required before execution.",
+            message="Plan generated and validated. Review the dry-run preview, then explicitly approve execution.",
             plan={
                 "plan": validated_plan.model_dump(),
                 "policy": policy.model_dump(),
+                "preview": preview.model_dump(),
             },
         )
 
@@ -63,6 +65,24 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
+@app.post("/dry-run", response_model=ChatResponse)
+async def dry_run_endpoint(request: ExecuteRequest):
+    try:
+        validator = SchemaValidator()
+        validated_plan = validator.validate_plan(request.plan)
+        validator.enforce_security_policies(validated_plan)
+        preview = ExecutionEngine(registry=registry).preview(validated_plan)
+        return ChatResponse(
+            status="dry-run",
+            message="Dry run completed. No changes were executed.",
+            plan=preview.model_dump(),
+        )
+    except DevAIException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dry run error: {str(e)}")
 
 
 @app.post("/execute", response_model=ChatResponse)

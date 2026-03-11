@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from devai.core.models import ActionType
+from devai.utils.core.models import ActionType
 
 class ConnectorBase:
     """

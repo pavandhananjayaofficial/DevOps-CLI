@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from sqlmodel import select
 from sqlmodel import select, delete
-from devai.memory.database import get_session, ResourceState, ServerState
+from devai.knowledge.database import get_session, ResourceState, ServerState
 
 class StateManager:
     """

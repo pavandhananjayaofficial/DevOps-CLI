@@ -3,12 +3,20 @@ from typing import Deque, Optional
 
 from devai.audit.audit_logger import AuditLogger
 from devai.connectors.base import ConnectorBase
-from devai.utils.core.exceptions import DevAIException, ExecutionError
-from devai.utils.core.models import DeploymentPlan, ExecutedResource, ExecutionReport, ResourceDefinition
-from devai.utils.core.server_manager import ServerManager
+from devai.core.exceptions import DevAIException, ExecutionError
+from devai.core.models import (
+    ActionType,
+    DeploymentPlan,
+    ExecutedResource,
+    ExecutionPreview,
+    ExecutionPreviewItem,
+    ExecutionReport,
+    ResourceDefinition,
+)
+from devai.core.server_manager import ServerManager
 from devai.execution.approvals import ApprovalCallback, ApprovalGate
 from devai.execution.registry import ExecutorRegistry
-from devai.database.models import StateManager
+from devai.memory.state_manager import StateManager
 from devai.plugins.registry import PluginRegistry
 from devai.server.deployment_manager import DeploymentManager
 
@@ -23,17 +31,40 @@ class ExecutionEngine:
         self.audit_logger = audit_logger or AuditLogger()
 
     def register_connector(self, resource_type: str, connector: ConnectorBase):
-        """Plugin entry point for new infrastructure providers."""
         self.registry.plugin_registry.connectors[resource_type] = connector
+
+    def preview(self, plan: DeploymentPlan) -> ExecutionPreview:
+        ordered_resources = self._resolve_execution_order(plan)
+        preview = ExecutionPreview(
+            plan_description=plan.description,
+            environment=plan.metadata.environment,
+            requires_manual_approval=plan.metadata.requires_manual_approval,
+            actions=[],
+        )
+        for index, resource in enumerate(ordered_resources, start=1):
+            action = resource.to_action()
+            preview.actions.append(
+                ExecutionPreviewItem(
+                    order=index,
+                    action_id=action.action_id,
+                    summary=action.summary,
+                    risk=action.risk,
+                    requires_approval=action.requires_approval,
+                )
+            )
+        self.audit_logger.record(
+            "plan_preview_generated",
+            description=plan.description,
+            environment=plan.metadata.environment,
+            action_count=len(preview.actions),
+        )
+        return preview
 
     def execute(
         self,
         plan: DeploymentPlan,
         approval_callback: ApprovalCallback | None = None,
     ) -> ExecutionReport:
-        """
-        Executes the plan by building a dependency graph and running tasks in order.
-        """
         self.audit_logger.record(
             "plan_execution_started",
             description=plan.description,
@@ -43,6 +74,20 @@ class ExecutionEngine:
         approval_gate = ApprovalGate(approval_callback)
         approval_gate.require_plan_approval(plan)
 
+        resource_map = {resource.name: resource for resource in plan.resources}
+        report = ExecutionReport(plan_description=plan.description)
+        for resource in self._resolve_execution_order(plan):
+            approval_gate.require_resource_approval(resource)
+            report.executed_resources.append(self._execute_resource(resource))
+
+        self.audit_logger.record(
+            "plan_execution_completed",
+            description=plan.description,
+            executed_resources=[item.model_dump() for item in report.executed_resources],
+        )
+        return report
+
+    def _resolve_execution_order(self, plan: DeploymentPlan) -> list[ResourceDefinition]:
         adj_list = {resource.name: resource.depends_on for resource in plan.resources}
         in_degree = {resource.name: 0 for resource in plan.resources}
 
@@ -57,7 +102,6 @@ class ExecutionEngine:
         while queue:
             node = queue.popleft()
             sorted_order.append(node)
-
             for name, dependencies in adj_list.items():
                 if node in dependencies:
                     in_degree[name] -= 1
@@ -68,23 +112,9 @@ class ExecutionEngine:
             raise ExecutionError("Circular dependency detected in the deployment plan DAG!")
 
         resource_map = {resource.name: resource for resource in plan.resources}
-        report = ExecutionReport(plan_description=plan.description)
-        for resource_name in sorted_order:
-            resource = resource_map[resource_name]
-            approval_gate.require_resource_approval(resource)
-            report.executed_resources.append(self._execute_resource(resource))
-
-        self.audit_logger.record(
-            "plan_execution_completed",
-            description=plan.description,
-            executed_resources=[item.model_dump() for item in report.executed_resources],
-        )
-        return report
+        return [resource_map[name] for name in sorted_order]
 
     def _execute_resource(self, resource: ResourceDefinition) -> ExecutedResource:
-        """
-        Routes the resource to the correct connector and handles orchestration logic.
-        """
         self.audit_logger.record(
             "resource_execution_started",
             resource=resource.name,
@@ -152,9 +182,6 @@ class ExecutionEngine:
         return result
 
     def _handle_orchestration(self, resource: ResourceDefinition) -> ExecutedResource:
-        """
-        High-level orchestration for multi-service deployments.
-        """
         props = resource.properties
         target_server = props.get("server", "default")
         services = props.get("services", [])
@@ -177,3 +204,4 @@ class ExecutionEngine:
             )
         finally:
             manager.close()
+
