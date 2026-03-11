@@ -96,6 +96,7 @@
             margin-top: 1rem;
             font-family: monospace;
             font-size: 0.85rem;
+            white-space: pre-wrap;
         }
 
         .approve-btn {
@@ -188,21 +189,21 @@
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
 
-        async function addMessage(text, role, plan = null) {
+        function addMessage(text, role, payload = null) {
             const div = document.createElement('div');
             div.className = `message ${role}-message`;
             div.textContent = text;
 
-            if (plan) {
+            if (payload) {
                 const planDiv = document.createElement('div');
                 planDiv.className = 'plan-card';
-                planDiv.textContent = JSON.stringify(plan, null, 2);
+                planDiv.textContent = JSON.stringify(payload, null, 2);
                 div.appendChild(planDiv);
 
                 const btn = document.createElement('button');
                 btn.className = 'approve-btn';
                 btn.textContent = 'Approve & Execute';
-                btn.onclick = () => executePlan(plan, btn);
+                btn.onclick = () => executePlan(payload.plan, btn);
                 div.appendChild(btn);
             }
 
@@ -224,7 +225,7 @@
                     body: JSON.stringify({ message: text })
                 });
                 const data = await response.json();
-                
+
                 if (response.ok) {
                     addMessage(data.message, 'ai', data.plan);
                 } else {
@@ -242,11 +243,17 @@
                 const response = await fetch('/execute', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(plan)
+                    body: JSON.stringify({ plan, approved: true })
                 });
                 const data = await response.json();
-                addMessage(data.message, 'ai');
-                btn.remove();
+                if (response.ok) {
+                    addMessage(data.message, 'ai', data.plan);
+                    btn.remove();
+                    return;
+                }
+                addMessage(`Execution failed: ${data.detail}`, 'ai');
+                btn.disabled = false;
+                btn.textContent = 'Retry Execution';
             } catch (err) {
                 addMessage('Execution failed.', 'ai');
                 btn.disabled = false;

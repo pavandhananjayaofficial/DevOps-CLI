@@ -1,78 +1,96 @@
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from devai.intent.parser import IntentParser
 from devai.ai.planner import AIPlanner
 from devai.validation.validator import SchemaValidator
 from devai.execution.engine import ExecutionEngine
 from devai.plugins.registry import PluginRegistry
 from devai.core.exceptions import DevAIException
-from fastapi.staticfiles import StaticFiles
+from devai.policy.policy_engine import PolicyEngine
 from fastapi.responses import FileResponse
-import json
 import os
 
 app = FastAPI(title="DevAI API")
 registry = PluginRegistry()
 registry.load_plugins()
 
+
 @app.get("/")
 async def get_index():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
 
+
 class ChatRequest(BaseModel):
     message: str
+
 
 class ChatResponse(BaseModel):
     status: str
     message: str
     plan: Optional[dict] = None
 
+
+class ExecuteRequest(BaseModel):
+    plan: dict
+    approved: bool = False
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     try:
-        # 1. Parse Intent
         parser = IntentParser()
-        intent = parser.parse(request.message)
-        
-        # 2. AI Planning
+        parser.parse(request.message)
+
         planner = AIPlanner()
         raw_plan = planner.generate_plan(request.message)
-        
-        # 3. Validation
+
         validator = SchemaValidator()
         validated_plan = validator.validate_plan(raw_plan)
         validator.enforce_security_policies(validated_plan)
-        
+        policy = PolicyEngine().evaluate(validated_plan, validated_plan.metadata.environment)
+
         return ChatResponse(
             status="planned",
-            message="Plan generated and validated. Please approve to execute.",
-            plan=validated_plan.model_dump()
+            message="Plan generated and validated. Explicit approval is required before execution.",
+            plan={
+                "plan": validated_plan.model_dump(),
+                "policy": policy.model_dump(),
+            },
         )
-        
+
     except DevAIException as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
+
 @app.post("/execute", response_model=ChatResponse)
-async def execute_endpoint(plan: dict):
+async def execute_endpoint(request: ExecuteRequest):
     try:
         validator = SchemaValidator()
-        validated_plan = validator.validate_plan(plan)
-        
+        validated_plan = validator.validate_plan(request.plan)
+
+        if not request.approved:
+            raise HTTPException(status_code=400, detail="Execution requires explicit approval.")
+
         engine = ExecutionEngine(registry=registry)
-        engine.execute(validated_plan)
-        
+        report = engine.execute(validated_plan, approval_callback=lambda _: request.approved)
+
         return ChatResponse(
             status="executed",
-            message="Infrastructure deployed successfully!"
+            message="Infrastructure deployed successfully!",
+            plan=report.model_dump(),
         )
+    except HTTPException:
+        raise
     except DevAIException as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
